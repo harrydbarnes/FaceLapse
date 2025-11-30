@@ -16,12 +16,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -30,9 +34,15 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Switch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
@@ -66,6 +76,8 @@ fun ProjectDetailScreen(
         }
     }
 
+    var showMenu by remember { mutableStateOf(false) }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -81,6 +93,33 @@ fun ProjectDetailScreen(
                     }
                     IconButton(onClick = { viewModel.exportVideo(context) }, enabled = !isGenerating && !isProcessing && photos.isNotEmpty()) {
                         Icon(Icons.Default.Share, contentDescription = "Export")
+                    }
+                    IconButton(onClick = { showMenu = !showMenu }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "More")
+                    }
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text("Date Overlay")
+                                    Switch(
+                                        checked = project?.isDateOverlayEnabled == true,
+                                        onCheckedChange = {
+                                            viewModel.toggleDateOverlay(it)
+                                            // Keep menu open? No, standard behavior is close.
+                                        },
+                                        modifier = Modifier.padding(start = 8.dp)
+                                    )
+                                }
+                            },
+                            onClick = {
+                                val current = project?.isDateOverlayEnabled == true
+                                viewModel.toggleDateOverlay(!current)
+                            }
+                        )
                     }
                 }
             )
@@ -109,9 +148,13 @@ fun ProjectDetailScreen(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    items(photos) { photo ->
+                    itemsIndexed(photos) { index, photo ->
                         PhotoItem(
                             photo = photo,
+                            isFirst = index == 0,
+                            isLast = index == photos.lastIndex,
+                            onMoveUp = { viewModel.movePhoto(photo, true) },
+                            onMoveDown = { viewModel.movePhoto(photo, false) },
                             onDelete = { viewModel.deletePhoto(photo) }
                         )
                     }
@@ -133,6 +176,10 @@ fun ProjectDetailScreen(
 @Composable
 fun PhotoItem(
     photo: PhotoEntity,
+    isFirst: Boolean,
+    isLast: Boolean,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
     onDelete: () -> Unit
 ) {
     Box(
@@ -149,9 +196,40 @@ fun PhotoItem(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .padding(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+            horizontalArrangement = Arrangement.spacedBy(0.dp)
         ) {
-            if (photo.isProcessed) {
+            if (!isFirst) {
+                IconButton(
+                    onClick = onMoveUp,
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowLeft, // Used as "Move Backward"
+                        contentDescription = "Move Backward",
+                        tint = androidx.compose.ui.graphics.Color.White
+                    )
+                }
+            }
+            if (!isLast) {
+                IconButton(
+                    onClick = onMoveDown,
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowRight, // Used as "Move Forward"
+                        contentDescription = "Move Forward",
+                        tint = androidx.compose.ui.graphics.Color.White
+                    )
+                }
+            }
+        }
+
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(4.dp)
+        ) {
+             if (photo.isProcessed) {
                 Icon(
                     imageVector = Icons.Default.Face,
                     contentDescription = "Face Detected",
@@ -159,7 +237,6 @@ fun PhotoItem(
                     modifier = Modifier.size(16.dp)
                 )
             }
-
             IconButton(
                 onClick = onDelete,
                 modifier = Modifier.size(24.dp)

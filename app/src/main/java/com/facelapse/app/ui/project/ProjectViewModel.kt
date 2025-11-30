@@ -61,6 +61,27 @@ class ProjectViewModel @Inject constructor(
         }
     }
 
+    fun movePhoto(photo: PhotoEntity, moveUp: Boolean) {
+        viewModelScope.launch {
+            val currentPhotos = repository.getPhotosList(projectId).toMutableList()
+            val index = currentPhotos.indexOfFirst { it.id == photo.id }
+            if (index == -1) return@launch
+
+            val newIndex = if (moveUp) index - 1 else index + 1
+            if (newIndex in 0 until currentPhotos.size) {
+                val otherPhoto = currentPhotos[newIndex]
+
+                // Swap sort orders
+                val updatedPhoto = photo.copy(sortOrder = otherPhoto.sortOrder)
+                val updatedOther = otherPhoto.copy(sortOrder = photo.sortOrder)
+
+                // Update in DB
+                repository.updatePhoto(updatedPhoto)
+                repository.updatePhoto(updatedOther)
+            }
+        }
+    }
+
     fun processFaces() {
         viewModelScope.launch {
             _isProcessing.value = true
@@ -88,13 +109,26 @@ class ProjectViewModel @Inject constructor(
         }
     }
 
+    fun toggleDateOverlay(enabled: Boolean) {
+        viewModelScope.launch {
+            val currentProject = repository.getProject(projectId)
+            if (currentProject != null) {
+                repository.updateProject(currentProject.copy(isDateOverlayEnabled = enabled))
+            }
+        }
+    }
+
     fun exportVideo(context: Context) {
         viewModelScope.launch {
             _isGenerating.value = true
             val currentPhotos = repository.getPhotosList(projectId)
             val outputFile = File(context.cacheDir, "facelapse_${projectId}.mp4")
 
-            val isDateOverlayEnabled = settingsRepository.isDateOverlayEnabled.first()
+            // Use project specific setting for on/off
+            val projectEntity = repository.getProject(projectId)
+            val isDateOverlayEnabled = projectEntity?.isDateOverlayEnabled ?: true
+
+            // Use global settings for styling
             val dateFontSize = settingsRepository.dateFontSize.first()
             val dateFormat = settingsRepository.dateFormat.first()
 
