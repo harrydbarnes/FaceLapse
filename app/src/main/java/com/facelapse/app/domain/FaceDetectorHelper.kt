@@ -4,17 +4,18 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.face.Face
 import com.google.mlkit.vision.face.FaceDetection
 import com.google.mlkit.vision.face.FaceDetectorOptions
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.IOException
+import java.util.concurrent.ExecutionException
 
 @Singleton
 class FaceDetectorHelper @Inject constructor(
@@ -32,7 +33,9 @@ class FaceDetectorHelper @Inject constructor(
         return withContext(Dispatchers.IO) {
             try {
                 val inputImage = InputImage.fromFilePath(context, uri)
-                val faces = detector.process(inputImage).await()
+                // Use standard Tasks.await
+                val task = detector.process(inputImage)
+                val faces = Tasks.await(task)
                 // Return the largest face
                 faces.maxByOrNull { it.boundingBox.width() * it.boundingBox.height() }
             } catch (e: IOException) {

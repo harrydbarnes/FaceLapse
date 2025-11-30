@@ -19,6 +19,8 @@ coil = "2.5.0"
 mlkitFaceDetection = "16.1.5"
 coroutines = "1.7.3"
 material3 = "1.2.0-beta01" # For expressive features
+# Add this line
+playServicesTasks = "18.0.2"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -54,6 +56,8 @@ androidx-datastore-preferences = { group = "androidx.datastore", name = "datasto
 
 # ML Kit
 mlkit-face-detection = { group = "com.google.mlkit", name = "face-detection", version.ref = "mlkitFaceDetection" }
+# Add this line
+play-services-tasks = { group = "com.google.android.gms", name = "play-services-tasks", version.ref = "playServicesTasks" }
 
 # Coil
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
