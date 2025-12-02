@@ -33,7 +33,7 @@ class VideoGenerator @Inject constructor(
         dateFormat: String,
         targetWidth: Int = 1080,
         targetHeight: Int = 1920,
-        fps: Int = 10
+        fps: Int = 10 // Explicitly included in patch
     ): Boolean {
         return withContext(Dispatchers.IO) {
             try {

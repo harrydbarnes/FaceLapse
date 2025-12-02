@@ -39,6 +39,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImagePainter
 import coil.compose.rememberAsyncImagePainter
 import com.facelapse.app.data.local.entity.PhotoEntity
+import com.facelapse.app.data.local.entity.ProjectEntity
 import com.google.mlkit.vision.face.Face
 import kotlinx.coroutines.launch
 import kotlin.math.min
@@ -191,9 +192,9 @@ fun ProjectSettingsDialog(
     onDismiss: () -> Unit,
     onSave: (Int, Boolean, Boolean) -> Unit
 ) {
-    var fps by remember { mutableStateOf(project.fps.toFloat()) }
-    var exportAsGif by remember { mutableStateOf(project.exportAsGif) }
-    var isDateOverlayEnabled by remember { mutableStateOf(project.isDateOverlayEnabled) }
+    var fps: Float by remember { mutableStateOf(project.fps.toFloat()) }
+    var exportAsGif: Boolean by remember { mutableStateOf(project.exportAsGif) }
+    var isDateOverlayEnabled: Boolean by remember { mutableStateOf(project.isDateOverlayEnabled) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
