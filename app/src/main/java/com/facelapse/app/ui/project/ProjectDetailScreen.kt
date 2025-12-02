@@ -7,6 +7,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -21,19 +22,26 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImagePainter
 import coil.compose.rememberAsyncImagePainter
 import com.facelapse.app.data.local.entity.PhotoEntity
 import com.google.mlkit.vision.face.Face
 import kotlinx.coroutines.launch
+import kotlin.math.min
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -179,6 +187,7 @@ fun FaceSelectionDialog(
 ) {
     var detectedFaces by remember { mutableStateOf<List<Face>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
+    var containerSize by remember { mutableStateOf(IntSize.Zero) }
 
     // Load faces when dialog opens
     LaunchedEffect(photo) {
@@ -202,57 +211,92 @@ fun FaceSelectionDialog(
                     modifier = Modifier.padding(16.dp)
                 )
 
-                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .onSizeChanged { containerSize = it } // Capture container size
+                ) {
                     if (isLoading) {
                         CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                     } else {
-                        // This box renders the image and overlays face boxes
-                        Box(modifier = Modifier.fillMaxSize()) {
-                             val imagePainter = rememberAsyncImagePainter(model = photo.originalUri)
-                             Image(
-                                painter = imagePainter,
-                                contentDescription = null,
-                                contentScale = ContentScale.Fit,
-                                modifier = Modifier.fillMaxSize()
-                             )
+                        val imagePainter = rememberAsyncImagePainter(model = photo.originalUri)
+                        val painterState = imagePainter.state
 
-                             // Draw clickable boxes for faces
-                             // Note: ML Kit coords are absolute pixels. We need to map them to the displayed image size.
-                             // This is complex in Compose "Fit". Simplified approach:
-                             // We only allow selection if we can reliably map coordinates.
-                             // For this snippet, we will list faces below or attempt overlay if possible.
-                             // BETTER UX: Just show the image and standard list buttons below if overlay is hard.
-                             // BUT user asked to "confirm which face".
+                        Image(
+                            painter = imagePainter,
+                            contentDescription = null,
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.fillMaxSize()
+                        )
 
-                             // Overlay Implementation
-                             // We need the original image dimensions to scale coordinates
-                             // Assuming ImagePainter gives us intrinsic size eventually, but asynchronous...
+                        if (painterState is AsyncImagePainter.State.Success && containerSize != IntSize.Zero) {
+                            val intrinsicSize = painterState.result.drawable.intrinsicWidth.toFloat() to painterState.result.drawable.intrinsicHeight.toFloat()
+                            val (imgW, imgH) = intrinsicSize
+                            val (viewW, viewH) = containerSize.width.toFloat() to containerSize.height.toFloat()
 
-                             // Fallback: Just display the detected faces as cropped thumbnails below?
-                             // No, overlay is best.
-                        }
+                            // Calculate ContentScale.Fit logic
+                            val scale = min(viewW / imgW, viewH / imgH)
+                            val displayedW = imgW * scale
+                            val displayedH = imgH * scale
+                            val offsetX = (viewW - displayedW) / 2
+                            val offsetY = (viewH - displayedH) / 2
 
-                        // Overlay Logic Layer
-                        Canvas(modifier = Modifier.fillMaxSize()) {
-                            // We need to know the scale factor used by ContentScale.Fit
-                            // This is tricky without loading the Bitmap to get dimensions.
-                            // For this example, we will assume the user clicks "Select this face" from a list below
+                            // Map Faces
+                            val mappedFaces = detectedFaces.map { face ->
+                                val rect = face.boundingBox
+                                val mappedRect = Rect(
+                                    left = rect.left * scale + offsetX,
+                                    top = rect.top * scale + offsetY,
+                                    right = rect.right * scale + offsetX,
+                                    bottom = rect.bottom * scale + offsetY
+                                )
+                                face to mappedRect
+                            }
+
+                            Canvas(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .pointerInput(mappedFaces) {
+                                        detectTapGestures { tapOffset ->
+                                            // Check if tap is inside any face rect
+                                            val clickedFace = mappedFaces.find { (_, rect) ->
+                                                rect.contains(tapOffset)
+                                            }?.first
+
+                                            if (clickedFace != null) {
+                                                viewModel.updateFaceSelection(photo, clickedFace)
+                                            }
+                                        }
+                                    }
+                            ) {
+                                mappedFaces.forEach { (face, rect) ->
+                                    // Highlight if selected
+                                    val isSelected = photo.faceX == face.boundingBox.left.toFloat()
+                                    val strokeColor = if (isSelected) Color.Green else Color.White
+                                    val strokeWidth = if (isSelected) 8.dp.toPx() else 4.dp.toPx()
+
+                                    drawRect(
+                                        color = strokeColor,
+                                        topLeft = rect.topLeft,
+                                        size = rect.size,
+                                        style = Stroke(width = strokeWidth)
+                                    )
+                                }
+                            }
                         }
                     }
                 }
 
-                // Selection List
-                Text("Detected Faces: ${detectedFaces.size}", modifier = Modifier.padding(8.dp))
+                // Selection List / Legend
+                Text("Detected Faces: ${detectedFaces.size} (Tap box to select)", modifier = Modifier.padding(8.dp))
 
                 Row(
-                    modifier = Modifier.fillMaxWidth().height(120.dp).padding(8.dp),
+                    modifier = Modifier.fillMaxWidth().height(80.dp).padding(8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    if (detectedFaces.isEmpty() && !isLoading) {
-                        Text("No faces found.", modifier = Modifier.align(Alignment.CenterVertically))
-                    }
-
-                    detectedFaces.forEachIndexed { index, face ->
+                     // Kept for fallback or quick access
+                     detectedFaces.forEachIndexed { index, face ->
                          Button(
                              onClick = {
                                  viewModel.updateFaceSelection(photo, face)
@@ -261,9 +305,7 @@ fun FaceSelectionDialog(
                              modifier = Modifier.fillMaxHeight()
                          ) {
                              Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                 Icon(Icons.Default.Face, null)
                                  Text("Face ${index + 1}")
-                                 // Highlight if this is the currently selected face
                                  if (photo.faceX == face.boundingBox.left.toFloat()) {
                                      Text("(Selected)", style = MaterialTheme.typography.labelSmall)
                                  }

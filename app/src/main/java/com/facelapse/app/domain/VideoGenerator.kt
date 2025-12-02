@@ -71,7 +71,16 @@ class VideoGenerator @Inject constructor(
                     if (!isActive()) break
 
                     // Load and process bitmap
-                    val bitmap = loadBitmap(Uri.parse(photo.originalUri), width, height, photo.faceX, photo.faceY, photo.faceWidth)
+                    // Updated to pass faceHeight for better centering
+                    val bitmap = loadBitmap(
+                        Uri.parse(photo.originalUri),
+                        width,
+                        height,
+                        photo.faceX,
+                        photo.faceY,
+                        photo.faceWidth,
+                        photo.faceHeight
+                    )
 
                     if (bitmap != null) {
                         if (isDateOverlayEnabled) {
@@ -79,7 +88,6 @@ class VideoGenerator @Inject constructor(
                         }
 
                         // Convert ARGB Bitmap to YUV420SP (NV21)
-                        // This uses the ALIGNED width/height
                         val argb = IntArray(width * height)
                         bitmap.getPixels(argb, 0, width, 0, 0, width, height)
                         encodeYUV420SP(yuvBuffer, argb, width, height)
@@ -158,7 +166,7 @@ class VideoGenerator @Inject constructor(
         return res
     }
 
-    // Standard NV21 conversion
+    // Standard NV21 conversion with Blue Tint Fix (Swapped R and B usage)
     private fun encodeYUV420SP(yuv420sp: ByteArray, argb: IntArray, width: Int, height: Int) {
         val frameSize = width * height
         var yIndex = 0
@@ -173,16 +181,24 @@ class VideoGenerator @Inject constructor(
 
         for (j in 0 until height) {
             for (i in 0 until width) {
-                // Masking required to get unsigned byte values
+                // Extract R, G, B assuming ARGB_8888
                 val pixel = argb[index]
                 r = (pixel and 0xff0000) shr 16
                 g = (pixel and 0xff00) shr 8
                 b = (pixel and 0xff)
 
-                // BT.601 conversion
-                Y = ((66 * r + 129 * g + 25 * b + 128) shr 8) + 16
-                U = ((-38 * r - 74 * g + 112 * b + 128) shr 8) + 128
-                V = ((112 * r - 94 * g - 18 * b + 128) shr 8) + 128
+                // Fix: Swap R and B in calculations to fix Blue Tint issue
+                // BT.601 conversion using B where R was expected, and R where B was expected
+                // Original: Y = 66*R + 129*G + 25*B ...
+                // Swapped:  Y = 66*B + 129*G + 25*R ...
+
+                val R = b // Swap logic
+                val B = r
+                val G = g
+
+                Y = ((66 * R + 129 * G + 25 * B + 128) shr 8) + 16
+                U = ((-38 * R - 74 * G + 112 * B + 128) shr 8) + 128
+                V = ((112 * R - 94 * G - 18 * B + 128) shr 8) + 128
 
                 yuv420sp[yIndex++] = (if (Y < 0) 0 else if (Y > 255) 255 else Y).toByte()
 
@@ -198,7 +214,15 @@ class VideoGenerator @Inject constructor(
 
     private fun isActive(): Boolean = true
 
-    private fun loadBitmap(uri: Uri, targetW: Int, targetH: Int, faceX: Float?, faceY: Float?, faceW: Float?): Bitmap? {
+    private fun loadBitmap(
+        uri: Uri,
+        targetW: Int,
+        targetH: Int,
+        faceX: Float?,
+        faceY: Float?,
+        faceW: Float?,
+        faceH: Float? // Added faceHeight
+    ): Bitmap? {
         return try {
              val inputStream = context.contentResolver.openInputStream(uri)
              val bitmap = BitmapFactory.decodeStream(inputStream)
@@ -216,13 +240,25 @@ class VideoGenerator @Inject constructor(
              var cropY = (scaledH - targetH) / 2
 
              // If Face data exists, Center on Face
-             if (faceX != null && faceY != null && faceW != null) {
+             if (faceX != null && faceY != null && faceW != null && faceH != null) {
+                  val sFaceX = faceX * scale
+                  val sFaceY = faceY * scale
+                  val sFaceW = faceW * scale
+                  val sFaceH = faceH * scale // Use height
+
+                  val faceCenterX = sFaceX + (sFaceW / 2)
+                  val faceCenterY = sFaceY + (sFaceH / 2) // Use height for Y center
+
+                  cropX = (faceCenterX - targetW / 2).toInt().coerceIn(0, scaledW - targetW)
+                  cropY = (faceCenterY - targetH / 2).toInt().coerceIn(0, scaledH - targetH)
+             } else if (faceX != null && faceY != null && faceW != null) {
+                  // Fallback if faceH missing (old data?)
                   val sFaceX = faceX * scale
                   val sFaceY = faceY * scale
                   val sFaceW = faceW * scale
 
                   val faceCenterX = sFaceX + (sFaceW / 2)
-                  val faceCenterY = sFaceY + (sFaceW / 2) // Approximate square face
+                  val faceCenterY = sFaceY + (sFaceW / 2)
 
                   cropX = (faceCenterX - targetW / 2).toInt().coerceIn(0, scaledW - targetW)
                   cropY = (faceCenterY - targetH / 2).toInt().coerceIn(0, scaledH - targetH)
@@ -232,7 +268,11 @@ class VideoGenerator @Inject constructor(
              if (finalBitmap != scaledBitmap && finalBitmap != bitmap) scaledBitmap.recycle()
              if (finalBitmap != bitmap) bitmap.recycle()
 
-             finalBitmap
+             // Ensure mutable for Canvas drawing
+             val mutableBitmap = finalBitmap.copy(Bitmap.Config.ARGB_8888, true)
+             if (mutableBitmap != finalBitmap) finalBitmap.recycle()
+
+             mutableBitmap
         } catch (e: Exception) {
             e.printStackTrace()
             null
@@ -243,10 +283,11 @@ class VideoGenerator @Inject constructor(
         val canvas = Canvas(bitmap)
         val paint = Paint().apply {
             color = Color.WHITE
-            textSize = fontSize.toFloat()
+            textSize = if (fontSize > 0) fontSize.toFloat() else 60f // Ensure reasonable default
             isAntiAlias = true
             setShadowLayer(5f, 0f, 0f, Color.BLACK)
             textAlign = Paint.Align.CENTER
+            alpha = 255
         }
 
         val dateString = try {

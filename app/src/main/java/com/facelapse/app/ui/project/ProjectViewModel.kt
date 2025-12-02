@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.io.File
 import java.util.UUID
@@ -35,9 +36,9 @@ class ProjectViewModel @Inject constructor(
 
     private val projectId: String = checkNotNull(savedStateHandle["projectId"])
 
-    val project: Flow<ProjectEntity?> = kotlinx.coroutines.flow.flow {
-        emit(repository.getProject(projectId))
-    }
+    // Fix: Make project flow reactive by observing all projects and filtering
+    val project: Flow<ProjectEntity?> = repository.getAllProjects()
+        .map { projects -> projects.find { it.id == projectId } }
 
     val photos = repository.getPhotosForProject(projectId)
 
@@ -134,6 +135,7 @@ class ProjectViewModel @Inject constructor(
 
     fun toggleDateOverlay(enabled: Boolean) {
         viewModelScope.launch {
+            // Use suspend getProject to fetch current state for update
             val currentProject = repository.getProject(projectId)
             if (currentProject != null) {
                 repository.updateProject(currentProject.copy(isDateOverlayEnabled = enabled))
