@@ -32,7 +32,11 @@ jobs:
           BUMP_MINOR=false
           BUMP_PATCH=false
 
-          commits=$(git log $LATEST_TAG..HEAD --pretty=format:"%s")
+          if [ "$LATEST_TAG" = "v0.0.0" ]; then
+            commits=$(git log --pretty=format:"%s")
+          else
+            commits=$(git log $LATEST_TAG..HEAD --pretty=format:"%s")
+          fi
 
           if echo "$commits" | grep -q "breaking"; then
             BUMP_MAJOR=true
