@@ -207,7 +207,7 @@ fun FaceSelectionDialog(
                         CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                     } else {
                         // This box renders the image and overlays face boxes
-                        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                        Box(modifier = Modifier.fillMaxSize()) {
                              val imagePainter = rememberAsyncImagePainter(model = photo.originalUri)
                              Image(
                                 painter = imagePainter,
