@@ -18,4 +18,10 @@ class HomeViewModel @Inject constructor(
             repository.createProject(name)
         }
     }
+
+    fun deleteProject(project: com.facelapse.app.data.local.entity.ProjectEntity) {
+        viewModelScope.launch {
+            repository.deleteProject(project)
+        }
+    }
 }

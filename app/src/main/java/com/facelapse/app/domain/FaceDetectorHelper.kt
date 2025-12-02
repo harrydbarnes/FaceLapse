@@ -1,8 +1,6 @@
 package com.facelapse.app.domain
 
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.net.Uri
 import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.vision.common.InputImage
@@ -10,12 +8,11 @@ import com.google.mlkit.vision.face.Face
 import com.google.mlkit.vision.face.FaceDetection
 import com.google.mlkit.vision.face.FaceDetectorOptions
 import dagger.hilt.android.qualifiers.ApplicationContext
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.IOException
-import java.util.concurrent.ExecutionException
+import javax.inject.Inject
+import javax.inject.Singleton
 
 @Singleton
 class FaceDetectorHelper @Inject constructor(
@@ -24,26 +21,21 @@ class FaceDetectorHelper @Inject constructor(
     private val detector = FaceDetection.getClient(
         FaceDetectorOptions.Builder()
             .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
-            .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL)
+            .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_NONE)
             .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_NONE)
             .build()
     )
 
-    suspend fun detectFace(uri: Uri): Face? {
+    // Changed return type to List<Face>
+    suspend fun detectFaces(uri: Uri): List<Face> {
         return withContext(Dispatchers.IO) {
             try {
                 val inputImage = InputImage.fromFilePath(context, uri)
-                // Use standard Tasks.await
                 val task = detector.process(inputImage)
-                val faces = Tasks.await(task)
-                // Return the largest face
-                faces.maxByOrNull { it.boundingBox.width() * it.boundingBox.height() }
-            } catch (e: IOException) {
-                e.printStackTrace()
-                null
+                Tasks.await(task) // Return list of faces
             } catch (e: Exception) {
                 e.printStackTrace()
-                null
+                emptyList()
             }
         }
     }

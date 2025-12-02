@@ -13,11 +13,13 @@ import com.facelapse.app.data.repository.ProjectRepository
 import com.facelapse.app.data.repository.SettingsRepository
 import com.facelapse.app.domain.FaceDetectorHelper
 import com.facelapse.app.domain.VideoGenerator
+import com.google.mlkit.vision.face.Face
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.io.File
 import java.util.UUID
@@ -34,9 +36,9 @@ class ProjectViewModel @Inject constructor(
 
     private val projectId: String = checkNotNull(savedStateHandle["projectId"])
 
-    val project: Flow<ProjectEntity?> = kotlinx.coroutines.flow.flow {
-        emit(repository.getProject(projectId))
-    }
+    // Fix: Make project flow reactive by observing all projects and filtering
+    val project: Flow<ProjectEntity?> = repository.getAllProjects()
+        .map { projects -> projects.find { it.id == projectId } }
 
     val photos = repository.getPhotosForProject(projectId)
 
@@ -82,25 +84,47 @@ class ProjectViewModel @Inject constructor(
         }
     }
 
+    // Helper for UI to get faces for a specific photo on demand
+    suspend fun getFacesForPhoto(photo: PhotoEntity): List<Face> {
+        return faceDetectorHelper.detectFaces(Uri.parse(photo.originalUri))
+    }
+
+    fun updateFaceSelection(photo: PhotoEntity, face: Face) {
+        viewModelScope.launch {
+            val updatedPhoto = photo.copy(
+                isProcessed = true,
+                faceX = face.boundingBox.left.toFloat(),
+                faceY = face.boundingBox.top.toFloat(),
+                faceWidth = face.boundingBox.width().toFloat(),
+                faceHeight = face.boundingBox.height().toFloat()
+            )
+            repository.updatePhoto(updatedPhoto)
+        }
+    }
+
     fun processFaces() {
         viewModelScope.launch {
             _isProcessing.value = true
             val currentPhotos = repository.getPhotosList(projectId)
             currentPhotos.forEach { photo ->
                 if (!photo.isProcessed) {
-                    val face = faceDetectorHelper.detectFace(Uri.parse(photo.originalUri))
-                    if (face != null) {
+                    // Get ALL faces
+                    val faces = faceDetectorHelper.detectFaces(Uri.parse(photo.originalUri))
+
+                    // Default to largest face initially
+                    val bestFace = faces.maxByOrNull { it.boundingBox.width() * it.boundingBox.height() }
+
+                    if (bestFace != null) {
                         val updatedPhoto = photo.copy(
                             isProcessed = true,
-                            faceX = face.boundingBox.left.toFloat(),
-                            faceY = face.boundingBox.top.toFloat(),
-                            faceWidth = face.boundingBox.width().toFloat(),
-                            faceHeight = face.boundingBox.height().toFloat(),
-                            rotation = 0 // Assuming upright for now
+                            faceX = bestFace.boundingBox.left.toFloat(),
+                            faceY = bestFace.boundingBox.top.toFloat(),
+                            faceWidth = bestFace.boundingBox.width().toFloat(),
+                            faceHeight = bestFace.boundingBox.height().toFloat()
                         )
                         repository.updatePhoto(updatedPhoto)
                     } else {
-                         // Mark processed even if no face found to avoid reprocessing loop
+                         // Mark processed to stop auto-retry
                          repository.updatePhoto(photo.copy(isProcessed = true))
                     }
                 }
@@ -111,6 +135,7 @@ class ProjectViewModel @Inject constructor(
 
     fun toggleDateOverlay(enabled: Boolean) {
         viewModelScope.launch {
+            // Use suspend getProject to fetch current state for update
             val currentProject = repository.getProject(projectId)
             if (currentProject != null) {
                 repository.updateProject(currentProject.copy(isDateOverlayEnabled = enabled))
