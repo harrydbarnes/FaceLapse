@@ -9,5 +9,7 @@ data class ProjectEntity(
     @PrimaryKey val id: String = UUID.randomUUID().toString(),
     val name: String,
     val createdAt: Long = System.currentTimeMillis(),
-    val isDateOverlayEnabled: Boolean = true
+    val isDateOverlayEnabled: Boolean = true,
+    val fps: Int = 10,
+    val exportAsGif: Boolean = false
 )

@@ -19,11 +19,20 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): FaceLapseDatabase {
+        val MIGRATION_1_2 = object : androidx.room.migration.Migration(1, 2) {
+            override fun migrate(database: androidx.sqlite.db.SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE projects ADD COLUMN fps INTEGER NOT NULL DEFAULT 10")
+                database.execSQL("ALTER TABLE projects ADD COLUMN exportAsGif INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         return Room.databaseBuilder(
             context,
             FaceLapseDatabase::class.java,
             "facelapse.db"
-        ).build()
+        )
+        .addMigrations(MIGRATION_1_2)
+        .build()
     }
 
     @Provides
