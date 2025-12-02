@@ -7,7 +7,7 @@ import com.facelapse.app.data.local.dao.ProjectDao
 import com.facelapse.app.data.local.entity.PhotoEntity
 import com.facelapse.app.data.local.entity.ProjectEntity
 
-@Database(entities = [ProjectEntity::class, PhotoEntity::class], version = 1, exportSchema = false)
+@Database(entities = [ProjectEntity::class, PhotoEntity::class], version = 2, exportSchema = false)
 abstract class FaceLapseDatabase : RoomDatabase() {
     abstract fun projectDao(): ProjectDao
     abstract fun photoDao(): PhotoDao

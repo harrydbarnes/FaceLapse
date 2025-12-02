@@ -39,6 +39,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImagePainter
 import coil.compose.rememberAsyncImagePainter
 import com.facelapse.app.data.local.entity.PhotoEntity
+import com.facelapse.app.data.local.entity.ProjectEntity
 import com.google.mlkit.vision.face.Face
 import kotlinx.coroutines.launch
 import kotlin.math.min
@@ -64,6 +65,7 @@ fun ProjectDetailScreen(
     }
 
     var showMenu by remember { mutableStateOf(false) }
+    var showSettingsDialog by remember { mutableStateOf(false) }
 
     // State for Face Selection Dialog
     var selectedPhotoForEditing by remember { mutableStateOf<PhotoEntity?>(null) }
@@ -95,17 +97,11 @@ fun ProjectDetailScreen(
                         expanded = showMenu,
                         onDismissRequest = { showMenu = false }
                     ) {
-                        // FIX: Separated Click Logic
                         DropdownMenuItem(
-                            text = { Text("Date Overlay") },
-                            trailingIcon = {
-                                Switch(
-                                    checked = project?.isDateOverlayEnabled == true,
-                                    onCheckedChange = { viewModel.toggleDateOverlay(it) }
-                                )
-                            },
+                            text = { Text("Project Settings") },
                             onClick = {
-                                // Do nothing here, let the Switch handle it to avoid conflicts
+                                showMenu = false
+                                showSettingsDialog = true
                             }
                         )
                     }
@@ -177,6 +173,88 @@ fun ProjectDetailScreen(
             onDismiss = { selectedPhotoForEditing = null }
         )
     }
+
+    if (showSettingsDialog && project != null) {
+        ProjectSettingsDialog(
+            project = project!!,
+            onDismiss = { showSettingsDialog = false },
+            onSave = { fps, isGif, isOverlay ->
+                viewModel.updateProjectSettings(fps, isGif, isOverlay)
+                showSettingsDialog = false
+            }
+        )
+    }
+}
+
+@Composable
+fun ProjectSettingsDialog(
+    project: ProjectEntity,
+    onDismiss: () -> Unit,
+    onSave: (Int, Boolean, Boolean) -> Unit
+) {
+    var fps: Float by remember { mutableStateOf(project.fps.toFloat()) }
+    var exportAsGif: Boolean by remember { mutableStateOf(project.exportAsGif) }
+    var isDateOverlayEnabled: Boolean by remember { mutableStateOf(project.isDateOverlayEnabled) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Project Settings") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                // Animation Speed
+                Column {
+                    Text("Animation Speed: ${fps.toInt()} FPS")
+                    Slider(
+                        value = fps,
+                        onValueChange = { fps = it },
+                        valueRange = 1f..60f,
+                        steps = 59
+                    )
+                }
+
+                // Export Format
+                Column {
+                    Text("Export Format")
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(
+                            selected = !exportAsGif,
+                            onClick = { exportAsGif = false }
+                        )
+                        Text("Video (MP4)")
+                        Spacer(modifier = Modifier.width(16.dp))
+                        RadioButton(
+                            selected = exportAsGif,
+                            onClick = { exportAsGif = true }
+                        )
+                        Text("GIF")
+                    }
+                }
+
+                // Date Overlay
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Date Overlay")
+                    Switch(
+                        checked = isDateOverlayEnabled,
+                        onCheckedChange = { isDateOverlayEnabled = it }
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onSave(fps.toInt(), exportAsGif, isDateOverlayEnabled) }) {
+                Text("Save")
+            }
+        },
+        dismissButton = {
+            Button(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }
 
 @Composable

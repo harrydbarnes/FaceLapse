@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -61,6 +62,7 @@ fun HomeScreen(
 ) {
     val projects by viewModel.projects.collectAsState(initial = emptyList())
     var showCreateDialog by remember { mutableStateOf(false) }
+    var projectToDelete by remember { mutableStateOf<ProjectEntity?>(null) }
 
     Scaffold(
         topBar = {
@@ -90,8 +92,8 @@ fun HomeScreen(
                 val dismissState = rememberSwipeToDismissBoxState(
                     confirmValueChange = {
                         if (it == SwipeToDismissBoxValue.EndToStart) {
-                            viewModel.deleteProject(project)
-                            true
+                            projectToDelete = project
+                            false
                         } else false
                     }
                 )
@@ -142,6 +144,30 @@ fun HomeScreen(
             onCreate = { name ->
                 viewModel.createProject(name)
                 showCreateDialog = false
+            }
+        )
+    }
+
+    if (projectToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { projectToDelete = null },
+            title = { Text("Delete Project") },
+            text = { Text("Are you sure you want to delete '${projectToDelete?.name}'?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        projectToDelete?.let { viewModel.deleteProject(it) }
+                        projectToDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                Button(onClick = { projectToDelete = null }) {
+                    Text("Cancel")
+                }
             }
         )
     }

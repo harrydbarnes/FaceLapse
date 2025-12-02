@@ -133,12 +133,17 @@ class ProjectViewModel @Inject constructor(
         }
     }
 
-    fun toggleDateOverlay(enabled: Boolean) {
+    fun updateProjectSettings(fps: Int, exportAsGif: Boolean, isDateOverlayEnabled: Boolean) {
         viewModelScope.launch {
-            // Use suspend getProject to fetch current state for update
             val currentProject = repository.getProject(projectId)
             if (currentProject != null) {
-                repository.updateProject(currentProject.copy(isDateOverlayEnabled = enabled))
+                repository.updateProject(
+                    currentProject.copy(
+                        fps = fps,
+                        exportAsGif = exportAsGif,
+                        isDateOverlayEnabled = isDateOverlayEnabled
+                    )
+                )
             }
         }
     }
@@ -147,29 +152,60 @@ class ProjectViewModel @Inject constructor(
         viewModelScope.launch {
             _isGenerating.value = true
             val currentPhotos = repository.getPhotosList(projectId)
-            val outputFile = File(context.cacheDir, "facelapse_${projectId}.mp4")
+            val projectEntity = repository.getProject(projectId) ?: return@launch
+
+            val safeName = projectEntity.name.replace(Regex("[^a-zA-Z0-9.-]"), "_")
+            val timestamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.getDefault()).format(java.util.Date())
 
             // Use project specific setting for on/off
-            val projectEntity = repository.getProject(projectId)
-            val isDateOverlayEnabled = projectEntity?.isDateOverlayEnabled ?: true
+            val isDateOverlayEnabled = projectEntity.isDateOverlayEnabled
 
             // Use global settings for styling
             val dateFontSize = settingsRepository.dateFontSize.first()
             val dateFormat = settingsRepository.dateFormat.first()
 
-            val success = videoGenerator.generateVideo(
-                photos = currentPhotos,
-                outputFile = outputFile,
-                isDateOverlayEnabled = isDateOverlayEnabled,
-                dateFontSize = dateFontSize,
-                dateFormat = dateFormat
-            )
+            var success = false
+            val outputFile: File
+
+            if (projectEntity.exportAsGif) {
+                outputFile = File(context.cacheDir, "facelapse_${safeName}_${timestamp}.gif")
+                success = videoGenerator.generateGif(
+                    photos = currentPhotos,
+                    outputFile = outputFile,
+                    isDateOverlayEnabled = isDateOverlayEnabled,
+                    dateFontSize = dateFontSize,
+                    dateFormat = dateFormat,
+                    fps = projectEntity.fps
+                )
+            } else {
+                outputFile = File(context.cacheDir, "facelapse_${safeName}_${timestamp}.mp4")
+                success = videoGenerator.generateVideo(
+                    photos = currentPhotos,
+                    outputFile = outputFile,
+                    isDateOverlayEnabled = isDateOverlayEnabled,
+                    dateFontSize = dateFontSize,
+                    dateFormat = dateFormat,
+                    fps = projectEntity.fps
+                )
+            }
 
             if (success) {
-                shareVideo(context, outputFile)
+                shareFile(context, outputFile, if (projectEntity.exportAsGif) "image/gif" else "video/mp4")
             }
             _isGenerating.value = false
         }
+    }
+
+    private fun shareFile(context: Context, file: File, mimeType: String) {
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = mimeType
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        val chooser = Intent.createChooser(intent, "Share Time-lapse")
+        chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(chooser)
     }
 
     fun deletePhoto(photo: PhotoEntity) {
@@ -178,15 +214,4 @@ class ProjectViewModel @Inject constructor(
         }
     }
 
-    private fun shareVideo(context: Context, file: File) {
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
-        val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "video/mp4"
-            putExtra(Intent.EXTRA_STREAM, uri)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        val chooser = Intent.createChooser(intent, "Share Time-lapse")
-        chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        context.startActivity(chooser)
-    }
 }

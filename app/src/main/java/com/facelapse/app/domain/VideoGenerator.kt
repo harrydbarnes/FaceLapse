@@ -33,7 +33,7 @@ class VideoGenerator @Inject constructor(
         dateFormat: String,
         targetWidth: Int = 1080,
         targetHeight: Int = 1920,
-        fps: Int = 10
+        fps: Int = 10 // Explicitly included in patch
     ): Boolean {
         return withContext(Dispatchers.IO) {
             try {
@@ -51,7 +51,7 @@ class VideoGenerator @Inject constructor(
 
                 format.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420SemiPlanar)
                 format.setInteger(MediaFormat.KEY_BIT_RATE, 6_000_000)
-                format.setInteger(MediaFormat.KEY_FRAME_RATE, fps)
+                format.setInteger(MediaFormat.KEY_FRAME_RATE, fps) // Set FPS from project settings
                 format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
 
                 val encoder = MediaCodec.createEncoderByType(mime)
@@ -71,7 +71,6 @@ class VideoGenerator @Inject constructor(
                     if (!isActive()) break
 
                     // Load and process bitmap
-                    // Updated to pass faceHeight for better centering
                     val bitmap = loadBitmap(
                         Uri.parse(photo.originalUri),
                         width,
@@ -151,6 +150,55 @@ class VideoGenerator @Inject constructor(
                 mediaMuxer.release()
 
                 true
+            } catch (e: Exception) {
+                e.printStackTrace()
+                false
+            }
+        }
+    }
+
+    suspend fun generateGif(
+        photos: List<PhotoEntity>,
+        outputFile: File,
+        isDateOverlayEnabled: Boolean,
+        dateFontSize: Int,
+        dateFormat: String,
+        targetWidth: Int = 480, // Smaller default for GIF
+        targetHeight: Int = 854,
+        fps: Int = 10
+    ): Boolean {
+        return withContext(Dispatchers.IO) {
+            try {
+                if (outputFile.exists()) outputFile.delete()
+                val encoder = AnimatedGifEncoder()
+                encoder.start(java.io.FileOutputStream(outputFile))
+                encoder.setFrameRate(fps.toFloat())
+                encoder.setRepeat(0) // 0 = loop indefinitely
+                encoder.setQuality(10) // default
+
+                for (photo in photos) {
+                     if (!isActive()) break
+
+                    // Load and process bitmap
+                    val bitmap = loadBitmap(
+                        Uri.parse(photo.originalUri),
+                        targetWidth,
+                        targetHeight,
+                        photo.faceX,
+                        photo.faceY,
+                        photo.faceWidth,
+                        photo.faceHeight
+                    )
+
+                    if (bitmap != null) {
+                        if (isDateOverlayEnabled) {
+                            drawDateOverlay(bitmap, photo.timestamp, dateFontSize, dateFormat)
+                        }
+                        encoder.addFrame(bitmap)
+                        bitmap.recycle()
+                    }
+                }
+                encoder.finish()
             } catch (e: Exception) {
                 e.printStackTrace()
                 false
