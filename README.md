@@ -44,7 +44,7 @@ To build the project, use Gradle:
 # Debug APK
 ./gradlew assembleDebug
 
-# Release APK (Unsigned)
+# Release APK (Unsigned by default)
 ./gradlew assembleRelease
 ```
 
@@ -53,6 +53,7 @@ To build the project, use Gradle:
 *   **Image Loading:** Coil
 *   **DI:** Hilt
 *   **Database:** Room
+*   **Storage:** DataStore
 *   **ML:** ML Kit Face Detection
 *   **Navigation:** Compose Navigation
 
@@ -60,5 +61,5 @@ To build the project, use Gradle:
 
 The project uses GitHub Actions for continuous integration and delivery:
 
-*   **Build:** Runs on every push to `main` to verify the build and run tests.
-*   **Release:** Automatically bumps the version tag, creates a GitHub Release, and uploads the generated APKs when changes are pushed to `main`.
+*   **Build:** Runs on every push and pull request to `main` to verify the build and run tests.
+*   **Release:** Automated versioning and release. Pushes to `main` trigger a version bump and tag creation. Pushes of new tags trigger the release creation and artifact upload.
