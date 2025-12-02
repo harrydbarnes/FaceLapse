@@ -13,10 +13,10 @@ class AnimatedGifEncoder {
     protected var height: Int = 0
     protected var x: Int = 0
     protected var y: Int = 0
-    protected var transparent: Int = -1 // transparent color if given
+    protected var transparentColor: Int = -1 // transparent color if given
     protected var transIndex: Int = 0 // transparent index in color table
-    protected var repeat: Int = -1 // no repeat
-    protected var delay: Int = 0 // frame delay (hundredths)
+    protected var repeatCount: Int = -1 // no repeat
+    protected var frameDelay: Int = 0 // frame delay (hundredths)
     protected var started: Boolean = false // ready to output frames
     protected var out: OutputStream? = null
     protected var image: Bitmap? = null // current frame
@@ -26,30 +26,30 @@ class AnimatedGifEncoder {
     protected var colorTab: ByteArray? = null // RGB palette
     protected val usedEntry = BooleanArray(256) // active palette entries
     protected var palSize: Int = 7 // color table size (bits-1)
-    protected var dispose: Int = -1 // disposal code (-1 = use default)
+    protected var disposalCode: Int = -1 // disposal code (-1 = use default)
     protected var closeStream: Boolean = false // close stream when finished
     protected var firstFrame: Boolean = true
     protected var sizeSet: Boolean = false // if false, get size from first frame
     protected var sample: Int = 10 // default sample interval for quantizer
 
     fun setDelay(ms: Int) {
-        delay = ms / 10
+        frameDelay = ms / 10
     }
 
     fun setDispose(code: Int) {
         if (code >= 0) {
-            dispose = code
+            disposalCode = code
         }
     }
 
     fun setRepeat(iter: Int) {
         if (iter >= 0) {
-            repeat = iter
+            repeatCount = iter
         }
     }
 
     fun setTransparent(c: Int) {
-        transparent = c
+        transparentColor = c
     }
 
     fun addFrame(im: Bitmap?): Boolean {
@@ -68,7 +68,7 @@ class AnimatedGifEncoder {
             if (firstFrame) {
                 writeLSD() // logical screen descriptior
                 writePalette() // global color table
-                if (repeat >= 0) {
+            if (repeatCount >= 0) {
                     // use NS app extension to indicate reps
                     writeNetscapeExt()
                 }
@@ -116,7 +116,7 @@ class AnimatedGifEncoder {
 
     fun setFrameRate(fps: Float) {
         if (fps != 0f) {
-            delay = (100 / fps).toInt()
+            frameDelay = (100 / fps).toInt()
         }
     }
 
@@ -177,8 +177,8 @@ class AnimatedGifEncoder {
         colorDepth = 8
         palSize = 7
         // get closest match to transparent color if specified
-        if (transparent != -1) {
-            transIndex = findClosest(transparent)
+        if (transparentColor != -1) {
+            transIndex = findClosest(transparentColor)
         }
     }
 
@@ -242,15 +242,15 @@ class AnimatedGifEncoder {
         out!!.write(4) // data block size
         var transp: Int
         var disp: Int
-        if (transparent == -1) {
+        if (transparentColor == -1) {
             transp = 0
             disp = 0 // dispose = no action
         } else {
             transp = 1
             disp = 2 // force clear if using transparent color
         }
-        if (dispose >= 0) {
-            disp = dispose and 7 // user override
+        if (disposalCode >= 0) {
+            disp = disposalCode and 7 // user override
         }
         disp = disp shl 2
 
@@ -262,7 +262,7 @@ class AnimatedGifEncoder {
                     transp
         ) // 8 transparency flag
 
-        writeShort(delay) // delay x 1/100 sec
+        writeShort(frameDelay) // delay x 1/100 sec
         out!!.write(transIndex) // transparent color index
         out!!.write(0) // block terminator
     }
@@ -312,7 +312,7 @@ class AnimatedGifEncoder {
         writeString("NETSCAPE" + "2.0") // app id + auth code
         out!!.write(3) // sub-block size
         out!!.write(1) // loop sub-block id
-        writeShort(repeat) // loop count (extra iterations, 0=repeat forever)
+        writeShort(repeatCount) // loop count (extra iterations, 0=repeat forever)
         out!!.write(0) // block terminator
     }
 
