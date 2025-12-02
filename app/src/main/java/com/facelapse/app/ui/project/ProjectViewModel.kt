@@ -13,6 +13,7 @@ import com.facelapse.app.data.repository.ProjectRepository
 import com.facelapse.app.data.repository.SettingsRepository
 import com.facelapse.app.domain.FaceDetectorHelper
 import com.facelapse.app.domain.VideoGenerator
+import com.google.mlkit.vision.face.Face
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -82,25 +83,47 @@ class ProjectViewModel @Inject constructor(
         }
     }
 
+    // Helper for UI to get faces for a specific photo on demand
+    suspend fun getFacesForPhoto(photo: PhotoEntity): List<Face> {
+        return faceDetectorHelper.detectFaces(Uri.parse(photo.originalUri))
+    }
+
+    fun updateFaceSelection(photo: PhotoEntity, face: Face) {
+        viewModelScope.launch {
+            val updatedPhoto = photo.copy(
+                isProcessed = true,
+                faceX = face.boundingBox.left.toFloat(),
+                faceY = face.boundingBox.top.toFloat(),
+                faceWidth = face.boundingBox.width().toFloat(),
+                faceHeight = face.boundingBox.height().toFloat()
+            )
+            repository.updatePhoto(updatedPhoto)
+        }
+    }
+
     fun processFaces() {
         viewModelScope.launch {
             _isProcessing.value = true
             val currentPhotos = repository.getPhotosList(projectId)
             currentPhotos.forEach { photo ->
                 if (!photo.isProcessed) {
-                    val face = faceDetectorHelper.detectFace(Uri.parse(photo.originalUri))
-                    if (face != null) {
+                    // Get ALL faces
+                    val faces = faceDetectorHelper.detectFaces(Uri.parse(photo.originalUri))
+
+                    // Default to largest face initially
+                    val bestFace = faces.maxByOrNull { it.boundingBox.width() * it.boundingBox.height() }
+
+                    if (bestFace != null) {
                         val updatedPhoto = photo.copy(
                             isProcessed = true,
-                            faceX = face.boundingBox.left.toFloat(),
-                            faceY = face.boundingBox.top.toFloat(),
-                            faceWidth = face.boundingBox.width().toFloat(),
-                            faceHeight = face.boundingBox.height().toFloat(),
-                            rotation = 0 // Assuming upright for now
+                            faceX = bestFace.boundingBox.left.toFloat(),
+                            faceY = bestFace.boundingBox.top.toFloat(),
+                            faceWidth = bestFace.boundingBox.width().toFloat(),
+                            faceHeight = bestFace.boundingBox.height().toFloat()
                         )
                         repository.updatePhoto(updatedPhoto)
                     } else {
-                         // Mark processed even if no face found to avoid reprocessing loop
+                         // Mark processed to stop auto-retry
                          repository.updatePhoto(photo.copy(isProcessed = true))
                     }
                 }
