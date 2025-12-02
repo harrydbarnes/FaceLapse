@@ -18,14 +18,14 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -84,7 +84,7 @@ fun ProjectDetailScreen(
                 title = { Text(project?.name ?: "Project") },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
@@ -204,7 +204,7 @@ fun PhotoItem(
                     modifier = Modifier.size(24.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.KeyboardArrowLeft, // Used as "Move Backward"
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft, // Used as "Move Backward"
                         contentDescription = "Move Backward",
                         tint = androidx.compose.ui.graphics.Color.White
                     )
@@ -216,7 +216,7 @@ fun PhotoItem(
                     modifier = Modifier.size(24.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.KeyboardArrowRight, // Used as "Move Forward"
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight, // Used as "Move Forward"
                         contentDescription = "Move Forward",
                         tint = androidx.compose.ui.graphics.Color.White
                     )
