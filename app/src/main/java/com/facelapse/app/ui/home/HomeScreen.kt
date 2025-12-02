@@ -23,8 +23,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DismissDirection
-import androidx.compose.material3.DismissValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -32,10 +30,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SwipeToDismiss
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.rememberDismissState
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -88,19 +87,19 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             items(projects, key = { it.id }) { project ->
-                val dismissState = rememberDismissState(
+                val dismissState = rememberSwipeToDismissBoxState(
                     confirmValueChange = {
-                        if (it == DismissValue.DismissedToStart) {
+                        if (it == SwipeToDismissBoxValue.EndToStart) {
                             viewModel.deleteProject(project)
                             true
                         } else false
                     }
                 )
 
-                SwipeToDismiss(
+                SwipeToDismissBox(
                     state = dismissState,
-                    background = {
-                        val color = if (dismissState.dismissDirection == DismissDirection.EndToStart) {
+                    backgroundContent = {
+                        val color = if (dismissState.dismissDirection == SwipeToDismissBoxValue.EndToStart) {
                             Color.Red
                         } else {
                             Color.Transparent
@@ -120,11 +119,10 @@ fun HomeScreen(
                             )
                         }
                     },
-                    dismissContent = {
-                        ProjectItem(project = project, onClick = { onProjectClick(project.id) })
-                    },
-                    directions = setOf(DismissDirection.EndToStart)
-                )
+                    enableDismissFromStartToEnd = false
+                ) {
+                    ProjectItem(project = project, onClick = { onProjectClick(project.id) })
+                }
             }
             if (projects.isEmpty()) {
                 item {
