@@ -102,7 +102,8 @@ fun HomeScreen(
                 SwipeToDismissBox(
                     state = dismissState,
                     backgroundContent = {
-                        val color = if (dismissState.dismissDirection == SwipeToDismissBoxValue.EndToStart) {
+                        val showDeleteAction = dismissState.dismissDirection == SwipeToDismissBoxValue.EndToStart
+                        val color = if (showDeleteAction) {
                             MaterialTheme.colorScheme.error
                         } else {
                             Color.Transparent
@@ -116,11 +117,13 @@ fun HomeScreen(
                                 .padding(horizontal = 20.dp),
                             contentAlignment = Alignment.CenterEnd
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = "Delete",
-                                tint = MaterialTheme.colorScheme.onError
-                            )
+                            if (showDeleteAction) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Delete",
+                                    tint = MaterialTheme.colorScheme.onError
+                                )
+                            }
                         }
                     },
                     enableDismissFromStartToEnd = false
