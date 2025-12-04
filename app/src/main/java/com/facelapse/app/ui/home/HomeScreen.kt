@@ -44,6 +44,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -101,8 +102,9 @@ fun HomeScreen(
                 SwipeToDismissBox(
                     state = dismissState,
                     backgroundContent = {
-                        val color = if (dismissState.dismissDirection == SwipeToDismissBoxValue.EndToStart) {
-                            Color.Red
+                        val showDeleteAction = dismissState.dismissDirection == SwipeToDismissBoxValue.EndToStart
+                        val color = if (showDeleteAction) {
+                            MaterialTheme.colorScheme.error
                         } else {
                             Color.Transparent
                         }
@@ -110,15 +112,18 @@ fun HomeScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
+                                .clip(CardDefaults.shape)
                                 .background(color)
                                 .padding(horizontal = 20.dp),
                             contentAlignment = Alignment.CenterEnd
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = "Delete",
-                                tint = Color.White
-                            )
+                            if (showDeleteAction) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = stringResource(R.string.delete),
+                                    tint = MaterialTheme.colorScheme.onError
+                                )
+                            }
                         }
                     },
                     enableDismissFromStartToEnd = false
