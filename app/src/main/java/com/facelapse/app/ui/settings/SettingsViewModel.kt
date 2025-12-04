@@ -13,6 +13,8 @@ class SettingsViewModel @Inject constructor(
 ) : ViewModel() {
     val isDateOverlayEnabled = repository.isDateOverlayEnabled
     val showDayOfWeek = repository.showDayOfWeek
+    val defaultFps = repository.defaultFps
+    val defaultExportGif = repository.defaultExportGif
 
     fun setDateOverlayEnabled(enabled: Boolean) {
         viewModelScope.launch {
@@ -23,6 +25,18 @@ class SettingsViewModel @Inject constructor(
     fun setShowDayOfWeek(show: Boolean) {
         viewModelScope.launch {
             repository.setShowDayOfWeek(show)
+        }
+    }
+
+    fun setDefaultFps(fps: Int) {
+        viewModelScope.launch {
+            repository.setDefaultFps(fps)
+        }
+    }
+
+    fun setDefaultExportGif(exportGif: Boolean) {
+        viewModelScope.launch {
+            repository.setDefaultExportGif(exportGif)
         }
     }
 }
