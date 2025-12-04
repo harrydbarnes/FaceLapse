@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">FaceLapse</string>
+    <string name="settings_default_fps_format">Default Animation Speed: %d FPS</string>
+    <string name="settings_default_export_format">Default Export Format (Video vs GIF)</string>
+    <string name="settings_format_gif">GIF</string>
+    <string name="settings_format_video">Video</string>
 </resources>

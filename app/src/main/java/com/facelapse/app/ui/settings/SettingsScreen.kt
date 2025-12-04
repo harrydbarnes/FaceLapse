@@ -21,10 +21,15 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.facelapse.app.R
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -67,14 +72,14 @@ fun SettingsScreen(
                 onCheckedChange = { viewModel.setShowDayOfWeek(it) }
             )
             SettingSliderItem(
-                title = "Default Animation Speed: $defaultFps FPS",
+                title = stringResource(R.string.settings_default_fps_format, defaultFps),
                 value = defaultFps.toFloat(),
                 valueRange = 1f..60f,
-                onValueChange = { viewModel.setDefaultFps(it.roundToInt()) }
+                onValueChangeFinished = { viewModel.setDefaultFps(it.roundToInt()) }
             )
             SettingSwitchItem(
-                title = "Default Export Format (Video vs GIF)",
-                subtitle = if (defaultExportGif) "GIF" else "Video",
+                title = stringResource(R.string.settings_default_export_format),
+                subtitle = if (defaultExportGif) stringResource(R.string.settings_format_gif) else stringResource(R.string.settings_format_video),
                 checked = defaultExportGif,
                 onCheckedChange = { viewModel.setDefaultExportGif(it) }
             )
@@ -121,8 +126,10 @@ fun SettingSliderItem(
     title: String,
     value: Float,
     valueRange: ClosedFloatingPointRange<Float>,
-    onValueChange: (Float) -> Unit
+    onValueChangeFinished: (Float) -> Unit
 ) {
+    var sliderPosition by remember(value) { mutableStateOf(value) }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -133,9 +140,10 @@ fun SettingSliderItem(
             style = MaterialTheme.typography.bodyLarge
         )
         Slider(
-            value = value,
-            onValueChange = onValueChange,
-            valueRange = valueRange
+            value = sliderPosition,
+            onValueChange = { sliderPosition = it },
+            valueRange = valueRange,
+            onValueChangeFinished = { onValueChangeFinished(sliderPosition) }
         )
     }
 }

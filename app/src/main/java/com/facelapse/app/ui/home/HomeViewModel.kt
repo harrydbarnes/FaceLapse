@@ -18,8 +18,7 @@ class HomeViewModel @Inject constructor(
 
     fun createProject(name: String) {
         viewModelScope.launch {
-            val defaultFps = settingsRepository.defaultFps.first()
-            val defaultExportGif = settingsRepository.defaultExportGif.first()
+            val (defaultFps, defaultExportGif) = settingsRepository.projectDefaults.first()
             repository.createProject(name, defaultFps, defaultExportGif)
         }
     }

@@ -38,6 +38,13 @@ class SettingsRepository @Inject constructor(
     val defaultFps: Flow<Int> = dataStore.data.map { it[DEFAULT_FPS] ?: 10 }
     val defaultExportGif: Flow<Boolean> = dataStore.data.map { it[DEFAULT_EXPORT_GIF] ?: false }
 
+    val projectDefaults: Flow<Pair<Int, Boolean>> = dataStore.data.map { preferences ->
+        Pair(
+            preferences[DEFAULT_FPS] ?: 10,
+            preferences[DEFAULT_EXPORT_GIF] ?: false
+        )
+    }
+
     suspend fun setDateOverlayEnabled(enabled: Boolean) {
         dataStore.edit { it[DATE_OVERLAY_ENABLED] = enabled }
     }
