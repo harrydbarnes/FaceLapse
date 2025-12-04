@@ -286,14 +286,16 @@ fun ProjectSettingsDialog(
         },
         confirmButton = {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                fun performSave() = onSave(fps.toInt(), exportAsGif, isDateOverlayEnabled)
+
                 Button(onClick = {
-                    onSave(fps.toInt(), exportAsGif, isDateOverlayEnabled)
+                    performSave()
                     onDismiss()
                 }) {
                     Text("Save")
                 }
                 Button(onClick = {
-                    onSave(fps.toInt(), exportAsGif, isDateOverlayEnabled)
+                    performSave()
                     onExport()
                     onDismiss()
                 }) {
