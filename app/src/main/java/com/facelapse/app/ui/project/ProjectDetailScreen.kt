@@ -21,6 +21,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -120,22 +121,7 @@ fun ProjectDetailScreen(
                             onClick = { showSettingsDialog = true },
                             enabled = !isGenerating && !isProcessing && photos.isNotEmpty()
                         ) {
-                            Icon(Icons.Default.Share, contentDescription = "Export")
-                        }
-                        IconButton(onClick = { showMenu = !showMenu }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = "More")
-                        }
-                        DropdownMenu(
-                            expanded = showMenu,
-                            onDismissRequest = { showMenu = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("Project Settings") },
-                                onClick = {
-                                    showMenu = false
-                                    showSettingsDialog = true
-                                }
-                            )
+                            Icon(Icons.Default.Settings, contentDescription = "Project Settings")
                         }
                     }
                 )
@@ -217,7 +203,6 @@ fun ProjectDetailScreen(
             onDismiss = { showSettingsDialog = false },
             onSave = { fps, isGif, isOverlay ->
                 viewModel.updateProjectSettings(fps, isGif, isOverlay)
-                showSettingsDialog = false
             },
             onExport = {
                 viewModel.exportVideo(context)
@@ -227,7 +212,7 @@ fun ProjectDetailScreen(
 
     if (showRenameDialog && project != null) {
         RenameProjectDialog(
-            currentName = project!!.name,
+            currentName = project.name,
             onDismiss = { showRenameDialog = false },
             onConfirm = { newName ->
                 viewModel.renameProject(newName)
@@ -303,7 +288,10 @@ fun ProjectSettingsDialog(
             // We can put Save and Export in confirmButton row, or custom layout.
             // Let's use a Row in confirmButton for "Save" and "Export", and "Cancel" in dismissButton.
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { onSave(fps.toInt(), exportAsGif, isDateOverlayEnabled) }) {
+                Button(onClick = {
+                    onSave(fps.toInt(), exportAsGif, isDateOverlayEnabled)
+                    onDismiss()
+                }) {
                     Text("Save")
                 }
                 Button(onClick = {
