@@ -119,7 +119,7 @@ fun HomeScreen(
                             Icon(
                                 imageVector = Icons.Default.Delete,
                                 contentDescription = "Delete",
-                                tint = Color.White
+                                tint = MaterialTheme.colorScheme.onError
                             )
                         }
                     },
