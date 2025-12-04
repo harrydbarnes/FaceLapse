@@ -26,6 +26,9 @@ interface ProjectDao {
 
     @Update
     suspend fun updateProject(project: ProjectEntity)
+
+    @Query("UPDATE projects SET name = :name WHERE id = :id")
+    suspend fun renameProject(id: String, name: String)
 }
 
 @Dao
@@ -44,6 +47,9 @@ interface PhotoDao {
 
     @Delete
     suspend fun deletePhoto(photo: PhotoEntity)
+
+    @Query("DELETE FROM photos WHERE id IN (:ids)")
+    suspend fun deletePhotos(ids: List<String>)
 
     @Update
     suspend fun updatePhoto(photo: PhotoEntity)

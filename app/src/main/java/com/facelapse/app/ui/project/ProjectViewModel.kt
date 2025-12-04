@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
 import java.util.UUID
@@ -42,11 +43,41 @@ class ProjectViewModel @Inject constructor(
 
     val photos = repository.getPhotosForProject(projectId)
 
+    private val _selectedPhotoIds = MutableStateFlow<Set<String>>(emptySet())
+    val selectedPhotoIds = _selectedPhotoIds.asStateFlow()
+
     private val _isProcessing = MutableStateFlow(false)
     val isProcessing = _isProcessing.asStateFlow()
 
     private val _isGenerating = MutableStateFlow(false)
     val isGenerating = _isGenerating.asStateFlow()
+
+    fun toggleSelection(photoId: String) {
+        _selectedPhotoIds.update { currentIds ->
+            if (photoId in currentIds) {
+                currentIds - photoId
+            } else {
+                currentIds + photoId
+            }
+        }
+    }
+
+    fun clearSelection() {
+        _selectedPhotoIds.value = emptySet()
+    }
+
+    fun deleteSelected() {
+        viewModelScope.launch {
+            repository.deletePhotos(_selectedPhotoIds.value.toList())
+            clearSelection()
+        }
+    }
+
+    fun renameProject(name: String) {
+        viewModelScope.launch {
+            repository.renameProject(projectId, name)
+        }
+    }
 
     fun addPhotos(uris: List<Uri>) {
         viewModelScope.launch {

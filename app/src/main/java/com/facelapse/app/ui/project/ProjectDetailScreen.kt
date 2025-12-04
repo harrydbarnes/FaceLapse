@@ -4,9 +4,11 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -17,6 +19,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -54,6 +59,7 @@ fun ProjectDetailScreen(
     val photos by viewModel.photos.collectAsState(initial = emptyList())
     val isProcessing by viewModel.isProcessing.collectAsState()
     val isGenerating by viewModel.isGenerating.collectAsState()
+    val selectedPhotoIds by viewModel.selectedPhotoIds.collectAsState()
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -66,6 +72,7 @@ fun ProjectDetailScreen(
 
     var showMenu by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
+    var showRenameDialog by remember { mutableStateOf(false) }
 
     // State for Face Selection Dialog
     var selectedPhotoForEditing by remember { mutableStateOf<PhotoEntity?>(null) }
@@ -75,38 +82,50 @@ fun ProjectDetailScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(project?.name ?: "Project") },
-                navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+            if (selectedPhotoIds.isNotEmpty()) {
+                TopAppBar(
+                    title = { Text("${selectedPhotoIds.size} Selected") },
+                    navigationIcon = {
+                        IconButton(onClick = { viewModel.clearSelection() }) {
+                            Icon(Icons.Default.Close, contentDescription = "Clear Selection")
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = { viewModel.deleteSelected() }) {
+                            Icon(Icons.Default.Delete, contentDescription = "Delete Selected")
+                        }
                     }
-                },
-                actions = {
-                    // Standard Top Bar Actions
-                    IconButton(onClick = { viewModel.processFaces() }, enabled = !isProcessing && photos.isNotEmpty()) {
-                        Icon(Icons.Default.Face, contentDescription = "Align Faces")
-                    }
-                    IconButton(onClick = { viewModel.exportVideo(context) }, enabled = !isGenerating && !isProcessing && photos.isNotEmpty()) {
-                        Icon(Icons.Default.Share, contentDescription = "Export")
-                    }
-                    IconButton(onClick = { showMenu = !showMenu }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "More")
-                    }
-                    DropdownMenu(
-                        expanded = showMenu,
-                        onDismissRequest = { showMenu = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Project Settings") },
-                            onClick = {
-                                showMenu = false
-                                showSettingsDialog = true
-                            }
+                )
+            } else {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = project?.name ?: "Project",
+                            modifier = Modifier.clickable { showRenameDialog = true }
                         )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onBackClick) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
+                    },
+                    actions = {
+                        // Standard Top Bar Actions
+                        IconButton(
+                            onClick = { viewModel.processFaces() },
+                            enabled = !isProcessing && photos.isNotEmpty()
+                        ) {
+                            Icon(Icons.Default.Face, contentDescription = "Align Faces")
+                        }
+                        IconButton(
+                            onClick = { showSettingsDialog = true },
+                            enabled = !isGenerating && !isProcessing && photos.isNotEmpty()
+                        ) {
+                            Icon(Icons.Default.Settings, contentDescription = "Project Settings")
+                        }
                     }
-                }
-            )
+                )
+            }
         },
         floatingActionButton = {
             if (showDetectFab) {
@@ -141,14 +160,18 @@ fun ProjectDetailScreen(
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     itemsIndexed(photos) { index, photo ->
+                        val isSelected = selectedPhotoIds.contains(photo.id)
                         PhotoItem(
                             photo = photo,
                             isFirst = index == 0,
                             isLast = index == photos.lastIndex,
+                            isSelected = isSelected,
+                            inSelectionMode = selectedPhotoIds.isNotEmpty(),
                             onMoveUp = { viewModel.movePhoto(photo, true) },
                             onMoveDown = { viewModel.movePhoto(photo, false) },
                             onDelete = { viewModel.deletePhoto(photo) },
-                            onClick = { selectedPhotoForEditing = photo } // Open selection dialog
+                            onToggleSelection = { viewModel.toggleSelection(photo.id) },
+                            onClick = { selectedPhotoForEditing = photo }
                         )
                     }
                 }
@@ -174,15 +197,31 @@ fun ProjectDetailScreen(
         )
     }
 
-    if (showSettingsDialog && project != null) {
-        ProjectSettingsDialog(
-            project = project!!,
-            onDismiss = { showSettingsDialog = false },
-            onSave = { fps, isGif, isOverlay ->
-                viewModel.updateProjectSettings(fps, isGif, isOverlay)
-                showSettingsDialog = false
-            }
-        )
+    if (showSettingsDialog) {
+        project?.let { p ->
+            ProjectSettingsDialog(
+                project = p,
+                onDismiss = { showSettingsDialog = false },
+                onSave = { fps, isGif, isOverlay ->
+                    viewModel.updateProjectSettings(fps, isGif, isOverlay)
+                },
+                onExport = {
+                    viewModel.exportVideo(context)
+                }
+            )
+        }
+    }
+
+    if (showRenameDialog) {
+        project?.let { p ->
+            RenameProjectDialog(
+                currentName = p.name,
+                onDismiss = { showRenameDialog = false },
+                onConfirm = { newName ->
+                    viewModel.renameProject(newName)
+                }
+            )
+        }
     }
 }
 
@@ -190,7 +229,8 @@ fun ProjectDetailScreen(
 fun ProjectSettingsDialog(
     project: ProjectEntity,
     onDismiss: () -> Unit,
-    onSave: (Int, Boolean, Boolean) -> Unit
+    onSave: (Int, Boolean, Boolean) -> Unit,
+    onExport: () -> Unit
 ) {
     var fps: Float by remember { mutableStateOf(project.fps.toFloat()) }
     var exportAsGif: Boolean by remember { mutableStateOf(project.exportAsGif) }
@@ -245,14 +285,58 @@ fun ProjectSettingsDialog(
             }
         },
         confirmButton = {
-            Button(onClick = { onSave(fps.toInt(), exportAsGif, isDateOverlayEnabled) }) {
-                Text("Save")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                fun performSave() = onSave(fps.toInt(), exportAsGif, isDateOverlayEnabled)
+
+                Button(onClick = {
+                    performSave()
+                    onDismiss()
+                }) {
+                    Text("Save")
+                }
+                Button(onClick = {
+                    performSave()
+                    onExport()
+                    onDismiss()
+                }) {
+                    Text("Save & Export")
+                }
             }
         },
         dismissButton = {
             Button(onClick = onDismiss) {
                 Text("Cancel")
             }
+        }
+    )
+}
+
+@Composable
+fun RenameProjectDialog(
+    currentName: String,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    var text by remember { mutableStateOf(currentName) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Rename Project") },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                label = { Text("Project Name") },
+                singleLine = true
+            )
+        },
+        confirmButton = {
+            Button(onClick = {
+                onConfirm(text)
+                onDismiss()
+            }) { Text("Rename") }
+        },
+        dismissButton = {
+            Button(onClick = onDismiss) { Text("Cancel") }
         }
     )
 }
@@ -403,20 +487,39 @@ fun FaceSelectionDialog(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PhotoItem(
     photo: PhotoEntity,
     isFirst: Boolean,
     isLast: Boolean,
+    isSelected: Boolean,
+    inSelectionMode: Boolean,
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
     onDelete: () -> Unit,
+    onToggleSelection: () -> Unit,
     onClick: () -> Unit
 ) {
     Box(
         modifier = Modifier
             .aspectRatio(1f)
-            .clickable(onClick = onClick) // Open Edit/Selection Dialog
+            .combinedClickable(
+                onClick = {
+                    if (inSelectionMode) {
+                        onToggleSelection()
+                    } else {
+                        onClick()
+                    }
+                },
+                onLongClick = {
+                    onToggleSelection()
+                }
+            )
+            .border(
+                width = if (isSelected) 4.dp else 0.dp,
+                color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
+            )
     ) {
         Image(
             painter = rememberAsyncImagePainter(model = photo.originalUri),
@@ -434,28 +537,51 @@ fun PhotoItem(
             )
         }
 
-        // ... existing Move/Delete buttons ...
-        Row(
-            modifier = Modifier.align(Alignment.TopEnd).padding(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(0.dp)
-        ) {
-            if (!isFirst) {
-                IconButton(onClick = onMoveUp, modifier = Modifier.size(24.dp)) {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Back", tint = Color.White)
-                }
-            }
-            if (!isLast) {
-                IconButton(onClick = onMoveDown, modifier = Modifier.size(24.dp)) {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Forward", tint = Color.White)
-                }
-            }
+        if (isSelected) {
+            Icon(
+                imageVector = Icons.Default.CheckCircle,
+                contentDescription = "Selected",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(4.dp)
+                    .size(24.dp)
+            )
         }
-        Row(modifier = Modifier.align(Alignment.BottomEnd).padding(4.dp)) {
-             if (photo.isProcessed) {
-                Icon(Icons.Default.Face, "Face Detected", tint = Color.Green, modifier = Modifier.size(16.dp))
+
+        if (!inSelectionMode) {
+            // ... existing Move/Delete buttons ...
+            Row(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(0.dp)
+            ) {
+                if (!isFirst) {
+                    IconButton(onClick = onMoveUp, modifier = Modifier.size(24.dp)) {
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Back", tint = Color.White)
+                    }
+                }
+                if (!isLast) {
+                    IconButton(onClick = onMoveDown, modifier = Modifier.size(24.dp)) {
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Forward", tint = Color.White)
+                    }
+                }
             }
-            IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
-                Icon(Icons.Default.Delete, "Delete", tint = Color.Red)
+            Row(modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(4.dp)) {
+                if (photo.isProcessed) {
+                    Icon(
+                        Icons.Default.Face,
+                        "Face Detected",
+                        tint = Color.Green,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+                IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
+                    Icon(Icons.Default.Delete, "Delete", tint = Color.Red)
+                }
             }
         }
     }
