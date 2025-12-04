@@ -120,7 +120,7 @@ fun HomeScreen(
                             if (showDeleteAction) {
                                 Icon(
                                     imageVector = Icons.Default.Delete,
-                                    contentDescription = "Delete",
+                                    contentDescription = stringResource(R.string.delete),
                                     tint = MaterialTheme.colorScheme.onError
                                 )
                             }
