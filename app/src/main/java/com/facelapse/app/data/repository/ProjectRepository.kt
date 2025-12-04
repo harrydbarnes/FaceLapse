@@ -17,8 +17,8 @@ class ProjectRepository @Inject constructor(
 
     suspend fun getProject(id: String): ProjectEntity? = projectDao.getProjectById(id)
 
-    suspend fun createProject(name: String) {
-        projectDao.insertProject(ProjectEntity(name = name))
+    suspend fun createProject(name: String, fps: Int, exportAsGif: Boolean) {
+        projectDao.insertProject(ProjectEntity(name = name, fps = fps, exportAsGif = exportAsGif))
     }
 
     suspend fun updateProject(project: ProjectEntity) {
