@@ -197,28 +197,32 @@ fun ProjectDetailScreen(
         )
     }
 
-    if (showSettingsDialog && project != null) {
-        ProjectSettingsDialog(
-            project = project!!,
-            onDismiss = { showSettingsDialog = false },
-            onSave = { fps, isGif, isOverlay ->
-                viewModel.updateProjectSettings(fps, isGif, isOverlay)
-            },
-            onExport = {
-                viewModel.exportVideo(context)
-            }
-        )
+    if (showSettingsDialog) {
+        project?.let { p ->
+            ProjectSettingsDialog(
+                project = p,
+                onDismiss = { showSettingsDialog = false },
+                onSave = { fps, isGif, isOverlay ->
+                    viewModel.updateProjectSettings(fps, isGif, isOverlay)
+                },
+                onExport = {
+                    viewModel.exportVideo(context)
+                }
+            )
+        }
     }
 
-    if (showRenameDialog && project != null) {
-        RenameProjectDialog(
-            currentName = project.name,
-            onDismiss = { showRenameDialog = false },
-            onConfirm = { newName ->
-                viewModel.renameProject(newName)
-                showRenameDialog = false
-            }
-        )
+    if (showRenameDialog) {
+        project?.let { p ->
+            RenameProjectDialog(
+                currentName = p.name,
+                onDismiss = { showRenameDialog = false },
+                onConfirm = { newName ->
+                    viewModel.renameProject(newName)
+                    showRenameDialog = false
+                }
+            )
+        }
     }
 }
 

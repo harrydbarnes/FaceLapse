@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
 import java.util.UUID
@@ -52,11 +53,12 @@ class ProjectViewModel @Inject constructor(
     val isGenerating = _isGenerating.asStateFlow()
 
     fun toggleSelection(photoId: String) {
-        val current = _selectedPhotoIds.value
-        if (current.contains(photoId)) {
-            _selectedPhotoIds.value = current - photoId
-        } else {
-            _selectedPhotoIds.value = current + photoId
+        _selectedPhotoIds.update { currentIds ->
+            if (photoId in currentIds) {
+                currentIds - photoId
+            } else {
+                currentIds + photoId
+            }
         }
     }
 
