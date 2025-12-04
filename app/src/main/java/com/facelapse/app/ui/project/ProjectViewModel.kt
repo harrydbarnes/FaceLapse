@@ -42,11 +42,40 @@ class ProjectViewModel @Inject constructor(
 
     val photos = repository.getPhotosForProject(projectId)
 
+    private val _selectedPhotoIds = MutableStateFlow<Set<String>>(emptySet())
+    val selectedPhotoIds = _selectedPhotoIds.asStateFlow()
+
     private val _isProcessing = MutableStateFlow(false)
     val isProcessing = _isProcessing.asStateFlow()
 
     private val _isGenerating = MutableStateFlow(false)
     val isGenerating = _isGenerating.asStateFlow()
+
+    fun toggleSelection(photoId: String) {
+        val current = _selectedPhotoIds.value
+        if (current.contains(photoId)) {
+            _selectedPhotoIds.value = current - photoId
+        } else {
+            _selectedPhotoIds.value = current + photoId
+        }
+    }
+
+    fun clearSelection() {
+        _selectedPhotoIds.value = emptySet()
+    }
+
+    fun deleteSelected() {
+        viewModelScope.launch {
+            repository.deletePhotos(_selectedPhotoIds.value.toList())
+            clearSelection()
+        }
+    }
+
+    fun renameProject(name: String) {
+        viewModelScope.launch {
+            repository.renameProject(projectId, name)
+        }
+    }
 
     fun addPhotos(uris: List<Uri>) {
         viewModelScope.launch {

@@ -25,6 +25,10 @@ class ProjectRepository @Inject constructor(
         projectDao.updateProject(project)
     }
 
+    suspend fun renameProject(id: String, name: String) {
+        projectDao.renameProject(id, name)
+    }
+
     suspend fun deleteProject(project: ProjectEntity) {
         projectDao.deleteProject(project)
     }
@@ -41,6 +45,10 @@ class ProjectRepository @Inject constructor(
 
     suspend fun deletePhoto(photo: PhotoEntity) {
         photoDao.deletePhoto(photo)
+    }
+
+    suspend fun deletePhotos(ids: List<String>) {
+        photoDao.deletePhotos(ids)
     }
 
     suspend fun getPhotosList(projectId: String): List<PhotoEntity> = photoDao.getPhotosForProjectList(projectId)
