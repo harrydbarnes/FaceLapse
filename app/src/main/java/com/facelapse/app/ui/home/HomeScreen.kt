@@ -103,7 +103,7 @@ fun HomeScreen(
                     state = dismissState,
                     backgroundContent = {
                         val color = if (dismissState.dismissDirection == SwipeToDismissBoxValue.EndToStart) {
-                            Color.Red
+                            MaterialTheme.colorScheme.error
                         } else {
                             Color.Transparent
                         }
