@@ -219,7 +219,6 @@ fun ProjectDetailScreen(
                 onDismiss = { showRenameDialog = false },
                 onConfirm = { newName ->
                     viewModel.renameProject(newName)
-                    showRenameDialog = false
                 }
             )
         }
@@ -286,11 +285,6 @@ fun ProjectSettingsDialog(
             }
         },
         confirmButton = {
-            // No single confirm button in the standard slot, using layout in text or custom logic?
-            // AlertDialog has 'confirmButton' and 'dismissButton'.
-            // Instruction: Cancel, Save, Export.
-            // We can put Save and Export in confirmButton row, or custom layout.
-            // Let's use a Row in confirmButton for "Save" and "Export", and "Cancel" in dismissButton.
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = {
                     onSave(fps.toInt(), exportAsGif, isDateOverlayEnabled)
@@ -303,7 +297,7 @@ fun ProjectSettingsDialog(
                     onExport()
                     onDismiss()
                 }) {
-                    Text("Export")
+                    Text("Save & Export")
                 }
             }
         },
@@ -334,7 +328,10 @@ fun RenameProjectDialog(
             )
         },
         confirmButton = {
-            Button(onClick = { onConfirm(text) }) { Text("Rename") }
+            Button(onClick = {
+                onConfirm(text)
+                onDismiss()
+            }) { Text("Rename") }
         },
         dismissButton = {
             Button(onClick = onDismiss) { Text("Cancel") }
