@@ -47,6 +47,7 @@ import com.facelapse.app.data.local.entity.PhotoEntity
 import com.facelapse.app.data.local.entity.ProjectEntity
 import com.google.mlkit.vision.face.Face
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 import kotlin.math.min
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -528,7 +529,6 @@ private fun isFaceSelected(photo: PhotoEntity, face: Face): Boolean {
             photo.faceY?.let { abs(it - face.boundingBox.top.toFloat()) < epsilon } ?: false &&
             photo.faceWidth?.let { abs(it - face.boundingBox.width().toFloat()) < epsilon } ?: false &&
             photo.faceHeight?.let { abs(it - face.boundingBox.height().toFloat()) < epsilon } ?: false
-}
 }
 
 @OptIn(ExperimentalFoundationApi::class)
