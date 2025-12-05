@@ -72,7 +72,7 @@ class VideoGenerator @Inject constructor(
                     while (outputBufferIndex != MediaCodec.INFO_TRY_AGAIN_LATER) {
                         if (outputBufferIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
                             if (muxerStarted) {
-                                throw RuntimeException("format changed twice")
+                                throw IllegalStateException("format changed twice")
                             }
                             val newFormat = encoder.outputFormat
                             trackIndex = mediaMuxer.addTrack(newFormat)
@@ -88,11 +88,7 @@ class VideoGenerator @Inject constructor(
 
                                 if (bufferInfo.size != 0) {
                                     if (!muxerStarted) {
-                                        // Should not happen if INFO_OUTPUT_FORMAT_CHANGED is handled correctly
-                                        val newFormat = encoder.outputFormat
-                                        trackIndex = mediaMuxer.addTrack(newFormat)
-                                        mediaMuxer.start()
-                                        muxerStarted = true
+                                        throw IllegalStateException("Muxer not started before writing sample data.")
                                     }
                                     outputBuffer.position(bufferInfo.offset)
                                     outputBuffer.limit(bufferInfo.offset + bufferInfo.size)
