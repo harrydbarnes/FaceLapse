@@ -11,6 +11,7 @@ import android.media.MediaCodecInfo
 import android.media.MediaFormat
 import android.media.MediaMuxer
 import android.net.Uri
+import androidx.exifinterface.media.ExifInterface
 import com.facelapse.app.data.local.entity.PhotoEntity
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -272,16 +273,47 @@ class VideoGenerator @Inject constructor(
         faceH: Float? // Added faceHeight
     ): Bitmap? {
         return try {
-             val inputStream = context.contentResolver.openInputStream(uri)
-             val bitmap = BitmapFactory.decodeStream(inputStream)
-             inputStream?.close() ?: return null
+             // 1. Get Rotation and Decode Bitmap efficiently from FileDescriptor
+             var rotationInDegrees = 0
+             val bitmap = context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                 val fileDescriptor = pfd.fileDescriptor
+                 try {
+                     val exifInterface = ExifInterface(fileDescriptor)
+                     val orientation = exifInterface.getAttributeInt(
+                         ExifInterface.TAG_ORIENTATION,
+                         ExifInterface.ORIENTATION_NORMAL
+                     )
+                     rotationInDegrees = when (orientation) {
+                         ExifInterface.ORIENTATION_ROTATE_90 -> 90
+                         ExifInterface.ORIENTATION_ROTATE_180 -> 180
+                         ExifInterface.ORIENTATION_ROTATE_270 -> 270
+                         else -> 0
+                     }
+                 } catch (e: Exception) {
+                     android.util.Log.e("VideoGenerator", "Error reading Exif", e)
+                 }
+                 BitmapFactory.decodeFileDescriptor(fileDescriptor)
+             } ?: return null
+
+             // 2. Rotate Bitmap if needed
+             val rotatedBitmap = if (rotationInDegrees != 0) {
+                 val matrix = android.graphics.Matrix()
+                 matrix.postRotate(rotationInDegrees.toFloat())
+                 val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+                 if (rotated != bitmap) {
+                     bitmap.recycle()
+                 }
+                 rotated
+             } else {
+                 bitmap
+             }
 
              // Calculate scale needed to fill target dimensions
-             val scale = Math.max(targetW.toFloat() / bitmap.width, targetH.toFloat() / bitmap.height)
-             val scaledW = (bitmap.width * scale).roundToInt()
-             val scaledH = (bitmap.height * scale).roundToInt()
+             val scale = Math.max(targetW.toFloat() / rotatedBitmap.width, targetH.toFloat() / rotatedBitmap.height)
+             val scaledW = (rotatedBitmap.width * scale).roundToInt()
+             val scaledH = (rotatedBitmap.height * scale).roundToInt()
 
-             val scaledBitmap = Bitmap.createScaledBitmap(bitmap, scaledW, scaledH, true)
+             val scaledBitmap = Bitmap.createScaledBitmap(rotatedBitmap, scaledW, scaledH, true)
 
              // Default: Center Crop
              var cropX = (scaledW - targetW) / 2
@@ -313,8 +345,8 @@ class VideoGenerator @Inject constructor(
              }
 
              val finalBitmap = Bitmap.createBitmap(scaledBitmap, cropX, cropY, targetW, targetH)
-             if (finalBitmap != scaledBitmap && finalBitmap != bitmap) scaledBitmap.recycle()
-             if (finalBitmap != bitmap) bitmap.recycle()
+             if (finalBitmap != scaledBitmap && scaledBitmap != rotatedBitmap) scaledBitmap.recycle()
+             if (finalBitmap != rotatedBitmap) rotatedBitmap.recycle()
 
              // Ensure mutable for Canvas drawing
              val mutableBitmap = finalBitmap.copy(Bitmap.Config.ARGB_8888, true)

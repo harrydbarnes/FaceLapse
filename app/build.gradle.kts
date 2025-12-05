@@ -78,6 +78,9 @@ dependencies {
     // DataStore
     implementation(libs.androidx.datastore.preferences)
 
+    // Exif Interface
+    implementation(libs.androidx.exifinterface)
+
     // ML Kit
     implementation(libs.mlkit.face.detection)
     implementation(libs.play.services.tasks)

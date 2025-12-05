@@ -123,6 +123,12 @@ fun ProjectDetailScreen(
                         ) {
                             Icon(Icons.Default.Settings, contentDescription = "Project Settings")
                         }
+                        IconButton(
+                            onClick = { viewModel.exportVideo(context) },
+                            enabled = !isGenerating && !isProcessing && photos.isNotEmpty()
+                        ) {
+                            Icon(Icons.Default.Share, contentDescription = "Share")
+                        }
                     }
                 )
             }
@@ -288,6 +294,9 @@ fun ProjectSettingsDialog(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 fun performSave() = onSave(fps.toInt(), exportAsGif, isDateOverlayEnabled)
 
+                Button(onClick = onDismiss) {
+                    Text("Cancel")
+                }
                 Button(onClick = {
                     performSave()
                     onDismiss()
@@ -299,15 +308,11 @@ fun ProjectSettingsDialog(
                     onExport()
                     onDismiss()
                 }) {
-                    Text("Save & Export")
+                    Text("Share")
                 }
             }
         },
-        dismissButton = {
-            Button(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
+        dismissButton = null
     )
 }
 
@@ -434,7 +439,8 @@ fun FaceSelectionDialog(
                             ) {
                                 mappedFaces.forEach { (face, rect) ->
                                     // Highlight if selected
-                                    val isSelected = photo.faceX == face.boundingBox.left.toFloat()
+                                    val isSelected = isFaceSelected(photo, face)
+
                                     val strokeColor = if (isSelected) Color.Green else Color.White
                                     val strokeWidth = if (isSelected) 8.dp.toPx() else 4.dp.toPx()
 
@@ -451,28 +457,57 @@ fun FaceSelectionDialog(
                 }
 
                 // Selection List / Legend
-                Text("Detected Faces: ${detectedFaces.size} (Tap box to select)", modifier = Modifier.padding(8.dp))
+                if (detectedFaces.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "No faces detected.",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                } else {
+                    Text(
+                        text = "Detected Faces: ${detectedFaces.size} (Tap box or button to select)",
+                        modifier = Modifier.padding(8.dp),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
 
-                Row(
-                    modifier = Modifier.fillMaxWidth().height(80.dp).padding(8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                     // Kept for fallback or quick access
-                     detectedFaces.forEachIndexed { index, face ->
-                         Button(
-                             onClick = {
-                                 viewModel.updateFaceSelection(photo, face)
-                                 onDismiss()
-                             },
-                             modifier = Modifier.fillMaxHeight()
-                         ) {
-                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                 Text("Face ${index + 1}")
-                                 if (photo.faceX == face.boundingBox.left.toFloat()) {
-                                     Text("(Selected)", style = MaterialTheme.typography.labelSmall)
-                                 }
-                             }
-                         }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(80.dp)
+                            .padding(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Kept for fallback or quick access
+                        detectedFaces.forEachIndexed { index, face ->
+                            val isSelected = isFaceSelected(photo, face)
+
+                            Button(
+                                onClick = {
+                                    viewModel.updateFaceSelection(photo, face)
+                                    onDismiss()
+                                },
+                                modifier = Modifier.fillMaxHeight(),
+                                colors = if (isSelected) ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary
+                                ) else ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.secondary
+                                )
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("Face ${index + 1}")
+                                    if (isSelected) {
+                                        Text("(Selected)", style = MaterialTheme.typography.labelSmall)
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -485,6 +520,15 @@ fun FaceSelectionDialog(
             }
         }
     }
+}
+
+private fun isFaceSelected(photo: PhotoEntity, face: Face): Boolean {
+    val epsilon = 0.001f // Define a small tolerance for float comparison
+    return photo.faceX?.let { abs(it - face.boundingBox.left.toFloat()) < epsilon } ?: false &&
+            photo.faceY?.let { abs(it - face.boundingBox.top.toFloat()) < epsilon } ?: false &&
+            photo.faceWidth?.let { abs(it - face.boundingBox.width().toFloat()) < epsilon } ?: false &&
+            photo.faceHeight?.let { abs(it - face.boundingBox.height().toFloat()) < epsilon } ?: false
+}
 }
 
 @OptIn(ExperimentalFoundationApi::class)
