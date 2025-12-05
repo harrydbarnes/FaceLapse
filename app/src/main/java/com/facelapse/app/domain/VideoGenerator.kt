@@ -11,6 +11,7 @@ import android.media.MediaCodecInfo
 import android.media.MediaFormat
 import android.media.MediaMuxer
 import android.net.Uri
+import androidx.exifinterface.media.ExifInterface
 import com.facelapse.app.data.local.entity.PhotoEntity
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -276,15 +277,15 @@ class VideoGenerator @Inject constructor(
              var rotationInDegrees = 0
              try {
                  context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                     val exifInterface = androidx.exifinterface.media.ExifInterface(inputStream)
+                     val exifInterface = ExifInterface(inputStream)
                      val orientation = exifInterface.getAttributeInt(
-                         androidx.exifinterface.media.ExifInterface.TAG_ORIENTATION,
-                         androidx.exifinterface.media.ExifInterface.ORIENTATION_NORMAL
+                         ExifInterface.TAG_ORIENTATION,
+                         ExifInterface.ORIENTATION_NORMAL
                      )
                      rotationInDegrees = when (orientation) {
-                         androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90 -> 90
-                         androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_180 -> 180
-                         androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_270 -> 270
+                         ExifInterface.ORIENTATION_ROTATE_90 -> 90
+                         ExifInterface.ORIENTATION_ROTATE_180 -> 180
+                         ExifInterface.ORIENTATION_ROTATE_270 -> 270
                          else -> 0
                      }
                  }
