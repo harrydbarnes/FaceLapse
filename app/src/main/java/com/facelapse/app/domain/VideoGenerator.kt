@@ -99,10 +99,8 @@ class VideoGenerator @Inject constructor(
                                 mediaMuxer.writeSampleData(trackIndex, outputBuffer, bufferInfo)
                             }
                             encoder.releaseOutputBuffer(outputBufferIndex, false)
-                        } else {
-                            // Break on unexpected index (e.g. negative but not handled above)
-                            if (outputBufferIndex < 0) break
                         }
+                        // Ignore other status codes (e.g. INFO_OUTPUT_BUFFERS_CHANGED)
                         outputBufferIndex = encoder.dequeueOutputBuffer(bufferInfo, timeoutUs)
                     }
                 }
@@ -372,7 +370,7 @@ class VideoGenerator @Inject constructor(
                     yuv420sp[yIndex++] = Y.coerceIn(0, 255).toByte()
 
                     // NV12 interleaves U and V (U first)
-                    if (j % 2 == 0 && index % 2 == 0) {
+                    if (j % 2 == 0 && i % 2 == 0) {
                         yuv420sp[uvIndex++] = U.coerceIn(0, 255).toByte()
                         yuv420sp[uvIndex++] = V.coerceIn(0, 255).toByte()
                     }
