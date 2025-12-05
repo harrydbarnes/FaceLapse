@@ -79,26 +79,27 @@ class VideoGenerator @Inject constructor(
                             mediaMuxer.start()
                             muxerStarted = true
                         } else if (outputBufferIndex >= 0) {
-                            val outputBuffer = encoder.getOutputBuffer(outputBufferIndex)!!
-                            if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) {
-                                // The codec config data was pulled out and fed to the muxer when we got
-                                // the INFO_OUTPUT_FORMAT_CHANGED status. Ignore it.
-                                bufferInfo.size = 0
-                            }
-
-                            if (bufferInfo.size != 0) {
-                                if (!muxerStarted) {
-                                    // Should not happen if INFO_OUTPUT_FORMAT_CHANGED is handled correctly
-                                    val newFormat = encoder.outputFormat
-                                    trackIndex = mediaMuxer.addTrack(newFormat)
-                                    mediaMuxer.start()
-                                    muxerStarted = true
+                            encoder.getOutputBuffer(outputBufferIndex)?.let { outputBuffer ->
+                                if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) {
+                                    // The codec config data was pulled out and fed to the muxer when we got
+                                    // the INFO_OUTPUT_FORMAT_CHANGED status. Ignore it.
+                                    bufferInfo.size = 0
                                 }
-                                outputBuffer.position(bufferInfo.offset)
-                                outputBuffer.limit(bufferInfo.offset + bufferInfo.size)
-                                mediaMuxer.writeSampleData(trackIndex, outputBuffer, bufferInfo)
+
+                                if (bufferInfo.size != 0) {
+                                    if (!muxerStarted) {
+                                        // Should not happen if INFO_OUTPUT_FORMAT_CHANGED is handled correctly
+                                        val newFormat = encoder.outputFormat
+                                        trackIndex = mediaMuxer.addTrack(newFormat)
+                                        mediaMuxer.start()
+                                        muxerStarted = true
+                                    }
+                                    outputBuffer.position(bufferInfo.offset)
+                                    outputBuffer.limit(bufferInfo.offset + bufferInfo.size)
+                                    mediaMuxer.writeSampleData(trackIndex, outputBuffer, bufferInfo)
+                                }
+                                encoder.releaseOutputBuffer(outputBufferIndex, false)
                             }
-                            encoder.releaseOutputBuffer(outputBufferIndex, false)
                         }
                         // Ignore other status codes (e.g. INFO_OUTPUT_BUFFERS_CHANGED)
                         outputBufferIndex = encoder.dequeueOutputBuffer(bufferInfo, timeoutUs)
@@ -347,25 +348,19 @@ class VideoGenerator @Inject constructor(
             val frameSize = width * height
             var yIndex = 0
             var uvIndex = frameSize
-            var r: Int
-            var g: Int
-            var b: Int
-            var Y: Int
-            var U: Int
-            var V: Int
             var index = 0
 
             for (j in 0 until height) {
                 for (i in 0 until width) {
                     val pixel = argb[index]
-                    r = (pixel and 0xff0000) shr 16
-                    g = (pixel and 0xff00) shr 8
-                    b = (pixel and 0xff)
+                    val r = (pixel and 0xff0000) shr 16
+                    val g = (pixel and 0xff00) shr 8
+                    val b = (pixel and 0xff)
 
                     // Standard BT.601 conversion
-                    Y = ((66 * r + 129 * g + 25 * b + 128) shr 8) + 16
-                    U = ((-38 * r - 74 * g + 112 * b + 128) shr 8) + 128
-                    V = ((112 * r - 94 * g - 18 * b + 128) shr 8) + 128
+                    val Y = ((66 * r + 129 * g + 25 * b + 128) shr 8) + 16
+                    val U = ((-38 * r - 74 * g + 112 * b + 128) shr 8) + 128
+                    val V = ((112 * r - 94 * g - 18 * b + 128) shr 8) + 128
 
                     yuv420sp[yIndex++] = Y.coerceIn(0, 255).toByte()
 
