@@ -64,6 +64,49 @@ class VideoGenerator @Inject constructor(
                 var muxerStarted = false
                 val bufferInfo = MediaCodec.BufferInfo()
 
+                // Local function to handle draining the encoder
+                fun drainEncoder(endOfStream: Boolean) {
+                    val timeoutUs = if (endOfStream) 10_000L else 0L
+                    var outputBufferIndex = encoder.dequeueOutputBuffer(bufferInfo, timeoutUs)
+
+                    while (outputBufferIndex != MediaCodec.INFO_TRY_AGAIN_LATER) {
+                        if (outputBufferIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
+                            if (muxerStarted) {
+                                throw RuntimeException("format changed twice")
+                            }
+                            val newFormat = encoder.outputFormat
+                            trackIndex = mediaMuxer.addTrack(newFormat)
+                            mediaMuxer.start()
+                            muxerStarted = true
+                        } else if (outputBufferIndex >= 0) {
+                            val outputBuffer = encoder.getOutputBuffer(outputBufferIndex)!!
+                            if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) {
+                                // The codec config data was pulled out and fed to the muxer when we got
+                                // the INFO_OUTPUT_FORMAT_CHANGED status. Ignore it.
+                                bufferInfo.size = 0
+                            }
+
+                            if (bufferInfo.size != 0) {
+                                if (!muxerStarted) {
+                                    // Should not happen if INFO_OUTPUT_FORMAT_CHANGED is handled correctly
+                                    val newFormat = encoder.outputFormat
+                                    trackIndex = mediaMuxer.addTrack(newFormat)
+                                    mediaMuxer.start()
+                                    muxerStarted = true
+                                }
+                                outputBuffer.position(bufferInfo.offset)
+                                outputBuffer.limit(bufferInfo.offset + bufferInfo.size)
+                                mediaMuxer.writeSampleData(trackIndex, outputBuffer, bufferInfo)
+                            }
+                            encoder.releaseOutputBuffer(outputBufferIndex, false)
+                        } else {
+                            // Break on unexpected index (e.g. negative but not handled above)
+                            if (outputBufferIndex < 0) break
+                        }
+                        outputBufferIndex = encoder.dequeueOutputBuffer(bufferInfo, timeoutUs)
+                    }
+                }
+
                 // 3. Pre-allocate buffer for YUV data (Y size + UV size)
                 val yuvBuffer = ByteArray(width * height * 3 / 2)
                 var presentationTimeUs = 0L
@@ -105,42 +148,8 @@ class VideoGenerator @Inject constructor(
                         bitmap.recycle()
                     }
 
-                    // Drain Output
-                    var outputBufferIndex = encoder.dequeueOutputBuffer(bufferInfo, 0)
-                    while (outputBufferIndex != MediaCodec.INFO_TRY_AGAIN_LATER) {
-                        if (outputBufferIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
-                            if (muxerStarted) {
-                                throw RuntimeException("format changed twice")
-                            }
-                            val newFormat = encoder.outputFormat
-                            trackIndex = mediaMuxer.addTrack(newFormat)
-                            mediaMuxer.start()
-                            muxerStarted = true
-                        } else if (outputBufferIndex >= 0) {
-                            val outputBuffer = encoder.getOutputBuffer(outputBufferIndex)!!
-                            if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) {
-                                // The codec config data was pulled out and fed to the muxer when we got
-                                // the INFO_OUTPUT_FORMAT_CHANGED status. Ignore it.
-                                bufferInfo.size = 0
-                            }
-
-                            if (bufferInfo.size != 0) {
-                                if (!muxerStarted) {
-                                    // Should not happen if INFO_OUTPUT_FORMAT_CHANGED is handled correctly
-                                    // But as a fallback/safety against race or weird device behavior:
-                                    val newFormat = encoder.outputFormat
-                                    trackIndex = mediaMuxer.addTrack(newFormat)
-                                    mediaMuxer.start()
-                                    muxerStarted = true
-                                }
-                                outputBuffer.position(bufferInfo.offset)
-                                outputBuffer.limit(bufferInfo.offset + bufferInfo.size)
-                                mediaMuxer.writeSampleData(trackIndex, outputBuffer, bufferInfo)
-                            }
-                            encoder.releaseOutputBuffer(outputBufferIndex, false)
-                        }
-                        outputBufferIndex = encoder.dequeueOutputBuffer(bufferInfo, 0)
-                    }
+                    // Regular Drain
+                    drainEncoder(endOfStream = false)
                 }
 
                 // End of Stream
@@ -150,40 +159,7 @@ class VideoGenerator @Inject constructor(
                 }
 
                 // Final Drain
-                var outputIndex = encoder.dequeueOutputBuffer(bufferInfo, 10_000)
-                while (outputIndex != MediaCodec.INFO_TRY_AGAIN_LATER) {
-                     if (outputIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
-                         if (!muxerStarted) {
-                             val newFormat = encoder.outputFormat
-                             trackIndex = mediaMuxer.addTrack(newFormat)
-                             mediaMuxer.start()
-                             muxerStarted = true
-                         }
-                     } else if (outputIndex >= 0) {
-                         val outputBuffer = encoder.getOutputBuffer(outputIndex)!!
-                         if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) {
-                             bufferInfo.size = 0
-                         }
-                         if (bufferInfo.size != 0) {
-                             if (!muxerStarted) {
-                                 // Fallback
-                                 val newFormat = encoder.outputFormat
-                                 trackIndex = mediaMuxer.addTrack(newFormat)
-                                 mediaMuxer.start()
-                                 muxerStarted = true
-                             }
-                             outputBuffer.position(bufferInfo.offset)
-                             outputBuffer.limit(bufferInfo.offset + bufferInfo.size)
-                             mediaMuxer.writeSampleData(trackIndex, outputBuffer, bufferInfo)
-                         }
-                         encoder.releaseOutputBuffer(outputIndex, false)
-                     } else {
-                         // Handling deprecated INFO_OUTPUT_BUFFERS_CHANGED if needed, but not critical for modern API
-                         // Break if we get something unexpected or just continue
-                         if (outputIndex < 0) break
-                     }
-                     outputIndex = encoder.dequeueOutputBuffer(bufferInfo, 0)
-                }
+                drainEncoder(endOfStream = true)
 
                 encoder.stop()
                 encoder.release()
@@ -369,7 +345,7 @@ class VideoGenerator @Inject constructor(
     companion object {
         // NV12 conversion (YUV 4:2:0 Semi-Planar, U then V)
         // Made internal/visible for testing
-        fun encodeYUV420SP(yuv420sp: ByteArray, argb: IntArray, width: Int, height: Int) {
+        internal fun encodeYUV420SP(yuv420sp: ByteArray, argb: IntArray, width: Int, height: Int) {
             val frameSize = width * height
             var yIndex = 0
             var uvIndex = frameSize
@@ -393,12 +369,12 @@ class VideoGenerator @Inject constructor(
                     U = ((-38 * r - 74 * g + 112 * b + 128) shr 8) + 128
                     V = ((112 * r - 94 * g - 18 * b + 128) shr 8) + 128
 
-                    yuv420sp[yIndex++] = (if (Y < 0) 0 else if (Y > 255) 255 else Y).toByte()
+                    yuv420sp[yIndex++] = Y.coerceIn(0, 255).toByte()
 
                     // NV12 interleaves U and V (U first)
                     if (j % 2 == 0 && index % 2 == 0) {
-                        yuv420sp[uvIndex++] = (if (U < 0) 0 else if (U > 255) 255 else U).toByte()
-                        yuv420sp[uvIndex++] = (if (V < 0) 0 else if (V > 255) 255 else V).toByte()
+                        yuv420sp[uvIndex++] = U.coerceIn(0, 255).toByte()
+                        yuv420sp[uvIndex++] = V.coerceIn(0, 255).toByte()
                     }
                     index++
                 }
