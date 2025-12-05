@@ -46,9 +46,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+
+import com.facelapse.app.R
 import com.facelapse.app.data.local.entity.ProjectEntity
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -120,7 +123,7 @@ fun HomeScreen(
                             if (showDeleteAction) {
                                 Icon(
                                     imageVector = Icons.Default.Delete,
-                                    contentDescription = stringResource(R.string.delete),
+                                    contentDescription = stringResource(R.string.action_delete),
                                     tint = MaterialTheme.colorScheme.onError
                                 )
                             }

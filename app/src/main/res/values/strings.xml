@@ -5,4 +5,5 @@
     <string name="settings_default_export_format">Default Export Format (Video vs GIF)</string>
     <string name="settings_format_gif">GIF</string>
     <string name="settings_format_video">Video</string>
+    <string name="action_delete">Delete</string>
 </resources>
