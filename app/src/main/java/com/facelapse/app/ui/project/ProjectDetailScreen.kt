@@ -123,6 +123,12 @@ fun ProjectDetailScreen(
                         ) {
                             Icon(Icons.Default.Settings, contentDescription = "Project Settings")
                         }
+                        IconButton(
+                            onClick = { viewModel.exportVideo(context) },
+                            enabled = !isGenerating && !isProcessing && photos.isNotEmpty()
+                        ) {
+                            Icon(Icons.Default.Share, contentDescription = "Share")
+                        }
                     }
                 )
             }
@@ -288,6 +294,9 @@ fun ProjectSettingsDialog(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 fun performSave() = onSave(fps.toInt(), exportAsGif, isDateOverlayEnabled)
 
+                Button(onClick = onDismiss) {
+                    Text("Cancel")
+                }
                 Button(onClick = {
                     performSave()
                     onDismiss()
@@ -299,15 +308,11 @@ fun ProjectSettingsDialog(
                     onExport()
                     onDismiss()
                 }) {
-                    Text("Save & Export")
+                    Text("Share")
                 }
             }
         },
-        dismissButton = {
-            Button(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
+        dismissButton = null
     )
 }
 
@@ -451,28 +456,56 @@ fun FaceSelectionDialog(
                 }
 
                 // Selection List / Legend
-                Text("Detected Faces: ${detectedFaces.size} (Tap box to select)", modifier = Modifier.padding(8.dp))
+                if (detectedFaces.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "No faces detected.",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                } else {
+                    Text(
+                        text = "Detected Faces: ${detectedFaces.size} (Tap box or button to select)",
+                        modifier = Modifier.padding(8.dp),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
 
-                Row(
-                    modifier = Modifier.fillMaxWidth().height(80.dp).padding(8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                     // Kept for fallback or quick access
-                     detectedFaces.forEachIndexed { index, face ->
-                         Button(
-                             onClick = {
-                                 viewModel.updateFaceSelection(photo, face)
-                                 onDismiss()
-                             },
-                             modifier = Modifier.fillMaxHeight()
-                         ) {
-                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                 Text("Face ${index + 1}")
-                                 if (photo.faceX == face.boundingBox.left.toFloat()) {
-                                     Text("(Selected)", style = MaterialTheme.typography.labelSmall)
-                                 }
-                             }
-                         }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(80.dp)
+                            .padding(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Kept for fallback or quick access
+                        detectedFaces.forEachIndexed { index, face ->
+                            val isSelected = photo.faceX == face.boundingBox.left.toFloat()
+                            Button(
+                                onClick = {
+                                    viewModel.updateFaceSelection(photo, face)
+                                    onDismiss()
+                                },
+                                modifier = Modifier.fillMaxHeight(),
+                                colors = if (isSelected) ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary
+                                ) else ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.secondary
+                                )
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("Face ${index + 1}")
+                                    if (isSelected) {
+                                        Text("(Selected)", style = MaterialTheme.typography.labelSmall)
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 
