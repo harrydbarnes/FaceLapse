@@ -289,12 +289,12 @@ class VideoGenerator @Inject constructor(
                      }
                  }
              } catch (e: Exception) {
-                 e.printStackTrace()
+                 android.util.Log.e("VideoGenerator", "Error reading Exif", e)
              }
 
-             val inputStream = context.contentResolver.openInputStream(uri)
-             val bitmap = BitmapFactory.decodeStream(inputStream)
-             inputStream?.close() ?: return null
+             val bitmap = context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                 BitmapFactory.decodeStream(inputStream)
+             } ?: return null
 
              // 2. Rotate Bitmap if needed
              val rotatedBitmap = if (rotationInDegrees != 0) {
@@ -346,7 +346,7 @@ class VideoGenerator @Inject constructor(
              }
 
              val finalBitmap = Bitmap.createBitmap(scaledBitmap, cropX, cropY, targetW, targetH)
-             if (finalBitmap != scaledBitmap && finalBitmap != rotatedBitmap) scaledBitmap.recycle()
+             if (finalBitmap != scaledBitmap && scaledBitmap != rotatedBitmap) scaledBitmap.recycle()
              if (finalBitmap != rotatedBitmap) rotatedBitmap.recycle()
 
              // Ensure mutable for Canvas drawing
