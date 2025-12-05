@@ -523,10 +523,12 @@ fun FaceSelectionDialog(
 }
 
 private fun isFaceSelected(photo: PhotoEntity, face: Face): Boolean {
-    return photo.faceX == face.boundingBox.left.toFloat() &&
-            photo.faceY == face.boundingBox.top.toFloat() &&
-            photo.faceWidth == face.boundingBox.width().toFloat() &&
-            photo.faceHeight == face.boundingBox.height().toFloat()
+    val epsilon = 0.001f // Define a small tolerance for float comparison
+    return photo.faceX?.let { abs(it - face.boundingBox.left.toFloat()) < epsilon } ?: false &&
+            photo.faceY?.let { abs(it - face.boundingBox.top.toFloat()) < epsilon } ?: false &&
+            photo.faceWidth?.let { abs(it - face.boundingBox.width().toFloat()) < epsilon } ?: false &&
+            photo.faceHeight?.let { abs(it - face.boundingBox.height().toFloat()) < epsilon } ?: false
+}
 }
 
 @OptIn(ExperimentalFoundationApi::class)
