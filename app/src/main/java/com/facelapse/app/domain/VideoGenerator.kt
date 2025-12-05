@@ -340,6 +340,9 @@ class VideoGenerator @Inject constructor(
     companion object {
         // NV12 conversion (YUV 4:2:0 Semi-Planar, U then V)
         // Made internal/visible for testing
+        // TODO: This pure Kotlin implementation is a performance bottleneck.
+        //  Consider replacing with RenderScript (deprecated) or Native Code (JNI/NDK) with libyuv
+        //  for high-resolution video encoding.
         internal fun encodeYUV420SP(yuv420sp: ByteArray, argb: IntArray, width: Int, height: Int) {
             val frameSize = width * height
             var yIndex = 0
