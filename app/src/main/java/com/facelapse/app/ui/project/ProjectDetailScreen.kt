@@ -439,10 +439,7 @@ fun FaceSelectionDialog(
                             ) {
                                 mappedFaces.forEach { (face, rect) ->
                                     // Highlight if selected
-                                    val isSelected = photo.faceX == face.boundingBox.left.toFloat() &&
-                                            photo.faceY == face.boundingBox.top.toFloat() &&
-                                            photo.faceWidth == face.boundingBox.width().toFloat() &&
-                                            photo.faceHeight == face.boundingBox.height().toFloat()
+                                    val isSelected = isFaceSelected(photo, face)
 
                                     val strokeColor = if (isSelected) Color.Green else Color.White
                                     val strokeWidth = if (isSelected) 8.dp.toPx() else 4.dp.toPx()
@@ -489,10 +486,7 @@ fun FaceSelectionDialog(
                     ) {
                         // Kept for fallback or quick access
                         detectedFaces.forEachIndexed { index, face ->
-                            val isSelected = photo.faceX == face.boundingBox.left.toFloat() &&
-                                    photo.faceY == face.boundingBox.top.toFloat() &&
-                                    photo.faceWidth == face.boundingBox.width().toFloat() &&
-                                    photo.faceHeight == face.boundingBox.height().toFloat()
+                            val isSelected = isFaceSelected(photo, face)
 
                             Button(
                                 onClick = {
@@ -526,6 +520,13 @@ fun FaceSelectionDialog(
             }
         }
     }
+}
+
+private fun isFaceSelected(photo: PhotoEntity, face: Face): Boolean {
+    return photo.faceX == face.boundingBox.left.toFloat() &&
+            photo.faceY == face.boundingBox.top.toFloat() &&
+            photo.faceWidth == face.boundingBox.width().toFloat() &&
+            photo.faceHeight == face.boundingBox.height().toFloat()
 }
 
 @OptIn(ExperimentalFoundationApi::class)

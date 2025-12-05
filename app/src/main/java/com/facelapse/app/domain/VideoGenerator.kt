@@ -273,11 +273,12 @@ class VideoGenerator @Inject constructor(
         faceH: Float? // Added faceHeight
     ): Bitmap? {
         return try {
-             // 1. Get Rotation from Exif
+             // 1. Get Rotation and Decode Bitmap efficiently from FileDescriptor
              var rotationInDegrees = 0
-             try {
-                 context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                     val exifInterface = ExifInterface(inputStream)
+             val bitmap = context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                 val fileDescriptor = pfd.fileDescriptor
+                 try {
+                     val exifInterface = ExifInterface(fileDescriptor)
                      val orientation = exifInterface.getAttributeInt(
                          ExifInterface.TAG_ORIENTATION,
                          ExifInterface.ORIENTATION_NORMAL
@@ -288,13 +289,10 @@ class VideoGenerator @Inject constructor(
                          ExifInterface.ORIENTATION_ROTATE_270 -> 270
                          else -> 0
                      }
+                 } catch (e: Exception) {
+                     android.util.Log.e("VideoGenerator", "Error reading Exif", e)
                  }
-             } catch (e: Exception) {
-                 android.util.Log.e("VideoGenerator", "Error reading Exif", e)
-             }
-
-             val bitmap = context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                 BitmapFactory.decodeStream(inputStream)
+                 BitmapFactory.decodeFileDescriptor(fileDescriptor)
              } ?: return null
 
              // 2. Rotate Bitmap if needed
