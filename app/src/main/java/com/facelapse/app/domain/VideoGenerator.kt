@@ -205,34 +205,36 @@ class VideoGenerator @Inject constructor(
         return withContext(Dispatchers.IO) {
             try {
                 if (outputFile.exists()) outputFile.delete()
-                val encoder = AnimatedGifEncoder()
-                encoder.start(java.io.FileOutputStream(outputFile))
-                encoder.setFrameRate(fps.toFloat())
-                encoder.setRepeat(0) // 0 = loop indefinitely
-                encoder.setQuality(10) // default
+                java.io.FileOutputStream(outputFile).use { fos ->
+                    val encoder = AnimatedGifEncoder()
+                    encoder.start(fos)
+                    encoder.setFrameRate(fps.toFloat())
+                    encoder.setRepeat(0) // 0 = loop indefinitely
+                    encoder.setQuality(10) // default
 
-                for (photo in photos) {
-                     if (!isActive()) break
+                    for (photo in photos) {
+                        if (!isActive()) break
 
-                    val bitmap = loadBitmap(
-                        Uri.parse(photo.originalUri),
-                        targetWidth,
-                        targetHeight,
-                        photo.faceX,
-                        photo.faceY,
-                        photo.faceWidth,
-                        photo.faceHeight
-                    )
+                        val bitmap = loadBitmap(
+                            Uri.parse(photo.originalUri),
+                            targetWidth,
+                            targetHeight,
+                            photo.faceX,
+                            photo.faceY,
+                            photo.faceWidth,
+                            photo.faceHeight
+                        )
 
-                    if (bitmap != null) {
-                        if (isDateOverlayEnabled) {
-                            drawDateOverlay(bitmap, photo.timestamp, dateFontSize, dateFormat)
+                        if (bitmap != null) {
+                            if (isDateOverlayEnabled) {
+                                drawDateOverlay(bitmap, photo.timestamp, dateFontSize, dateFormat)
+                            }
+                            encoder.addFrame(bitmap)
+                            bitmap.recycle()
                         }
-                        encoder.addFrame(bitmap)
-                        bitmap.recycle()
                     }
+                    encoder.finish()
                 }
-                encoder.finish()
             } catch (e: Exception) {
                 e.printStackTrace()
                 false
