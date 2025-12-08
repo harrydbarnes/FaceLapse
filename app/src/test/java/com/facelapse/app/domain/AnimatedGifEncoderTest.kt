@@ -7,7 +7,7 @@ import java.io.OutputStream
 
 class AnimatedGifEncoderTest {
 
-    class FakeOutputStream : OutputStream() {
+    private class FakeOutputStream : OutputStream() {
         var isClosed = false
         override fun write(b: Int) {
             if (isClosed) throw IOException("Stream is closed")
