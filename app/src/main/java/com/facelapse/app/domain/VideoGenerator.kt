@@ -143,11 +143,12 @@ class VideoGenerator @Inject constructor(
                         // Feed to Encoder
                         val inputBufferIndex = localEncoder.dequeueInputBuffer(10_000)
                         if (inputBufferIndex >= 0) {
-                            val inputBuffer = localEncoder.getInputBuffer(inputBufferIndex)!!
-                            inputBuffer.clear()
-                            inputBuffer.put(yuvBuffer)
-                            localEncoder.queueInputBuffer(inputBufferIndex, 0, yuvBuffer.size, presentationTimeUs, 0)
-                            presentationTimeUs += frameDurationUs
+                            localEncoder.getInputBuffer(inputBufferIndex)?.let { inputBuffer ->
+                                inputBuffer.clear()
+                                inputBuffer.put(yuvBuffer)
+                                localEncoder.queueInputBuffer(inputBufferIndex, 0, yuvBuffer.size, presentationTimeUs, 0)
+                                presentationTimeUs += frameDurationUs
+                            }
                         }
                         bitmap.recycle()
                     }
