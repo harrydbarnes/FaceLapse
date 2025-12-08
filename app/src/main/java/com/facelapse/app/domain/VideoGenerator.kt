@@ -44,6 +44,14 @@ class VideoGenerator @Inject constructor(
             var muxerStarted = false
             var success = false
 
+            fun safeCleanup(action: () -> Unit, errorMessage: String) {
+                try {
+                    action()
+                } catch (e: Exception) {
+                    Log.e("VideoGenerator", errorMessage, e)
+                }
+            }
+
             try {
                 if (outputFile.exists()) outputFile.delete()
 
@@ -171,14 +179,6 @@ class VideoGenerator @Inject constructor(
                 Log.e("VideoGenerator", "Error generating video", e)
                 success = false
             } finally {
-                fun safeCleanup(action: () -> Unit, errorMessage: String) {
-                    try {
-                        action()
-                    } catch (e: Exception) {
-                        Log.e("VideoGenerator", errorMessage, e)
-                    }
-                }
-
                 safeCleanup({ encoder?.stop() }, "Error stopping encoder")
                 safeCleanup({ encoder?.release() }, "Error releasing encoder")
                 safeCleanup({
