@@ -76,8 +76,8 @@ class VideoGenerator @Inject constructor(
                 encoder.start()
 
                 // Non-null local references for use in the loop and helper function
-                val localEncoder = encoder
-                val localMuxer = mediaMuxer
+                val localEncoder = encoder!!
+                val localMuxer = mediaMuxer!!
                 val bufferInfo = MediaCodec.BufferInfo()
 
                 // Local function to handle draining the encoder
