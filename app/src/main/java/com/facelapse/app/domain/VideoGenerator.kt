@@ -11,6 +11,7 @@ import android.media.MediaCodecInfo
 import android.media.MediaFormat
 import android.media.MediaMuxer
 import android.net.Uri
+import android.util.Log
 import androidx.exifinterface.media.ExifInterface
 import com.facelapse.app.data.local.entity.PhotoEntity
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -34,9 +35,23 @@ class VideoGenerator @Inject constructor(
         dateFormat: String,
         targetWidth: Int = 1080,
         targetHeight: Int = 1920,
-        fps: Int = 10 // Explicitly included in patch
+        fps: Int = 10
     ): Boolean {
         return withContext(Dispatchers.IO) {
+            var encoder: MediaCodec? = null
+            var mediaMuxer: MediaMuxer? = null
+            var trackIndex = -1
+            var muxerStarted = false
+            var success = false
+
+            fun safeCleanup(action: () -> Unit, errorMessage: String) {
+                try {
+                    action()
+                } catch (e: Exception) {
+                    Log.e("VideoGenerator", errorMessage, e)
+                }
+            }
+
             try {
                 if (outputFile.exists()) outputFile.delete()
 
@@ -44,24 +59,65 @@ class VideoGenerator @Inject constructor(
                 val width = roundTo16(targetWidth)
                 val height = roundTo16(targetHeight)
 
-                val mediaMuxer = MediaMuxer(outputFile.path, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+                mediaMuxer = MediaMuxer(outputFile.path, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
 
-                // 2. Setup MediaFormat with standard NV21/YUV420SemiPlanar
+                // 2. Setup MediaFormat with standard NV12 (YUV420SemiPlanar)
+                // Note: COLOR_FormatYUV420SemiPlanar is typically NV12 (Y followed by UV interleaved).
                 val mime = MediaFormat.MIMETYPE_VIDEO_AVC
                 val format = MediaFormat.createVideoFormat(mime, width, height)
 
                 format.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420SemiPlanar)
                 format.setInteger(MediaFormat.KEY_BIT_RATE, 6_000_000)
-                format.setInteger(MediaFormat.KEY_FRAME_RATE, fps) // Set FPS from project settings
+                format.setInteger(MediaFormat.KEY_FRAME_RATE, fps)
                 format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
 
-                val encoder = MediaCodec.createEncoderByType(mime)
+                encoder = MediaCodec.createEncoderByType(mime)
                 encoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
                 encoder.start()
 
-                var trackIndex = -1
-                var muxerStarted = false
+                // Non-null local references for use in the loop and helper function
+                val localEncoder = encoder!!
+                val localMuxer = mediaMuxer!!
                 val bufferInfo = MediaCodec.BufferInfo()
+
+                // Local function to handle draining the encoder
+                fun drainEncoder(endOfStream: Boolean) {
+                    val timeoutUs = if (endOfStream) 10_000L else 0L
+                    var outputBufferIndex = localEncoder.dequeueOutputBuffer(bufferInfo, timeoutUs)
+
+                    while (outputBufferIndex != MediaCodec.INFO_TRY_AGAIN_LATER) {
+                        if (outputBufferIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
+                            if (muxerStarted) {
+                                throw IllegalStateException("format changed twice")
+                            }
+                            val newFormat = localEncoder.outputFormat
+                            trackIndex = localMuxer.addTrack(newFormat)
+                            localMuxer.start()
+                            muxerStarted = true
+                        } else if (outputBufferIndex >= 0) {
+                            val outputBuffer = localEncoder.getOutputBuffer(outputBufferIndex)
+                            if (outputBuffer != null) {
+                                if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) {
+                                    // The codec config data was pulled out and fed to the muxer when we got
+                                    // the INFO_OUTPUT_FORMAT_CHANGED status. Ignore it.
+                                    bufferInfo.size = 0
+                                }
+
+                                if (bufferInfo.size != 0) {
+                                    if (!muxerStarted) {
+                                        throw IllegalStateException("Muxer not started before writing sample data.")
+                                    }
+                                    outputBuffer.position(bufferInfo.offset)
+                                    outputBuffer.limit(bufferInfo.offset + bufferInfo.size)
+                                    localMuxer.writeSampleData(trackIndex, outputBuffer, bufferInfo)
+                                }
+                            }
+                            localEncoder.releaseOutputBuffer(outputBufferIndex, false)
+                        }
+                        // Ignore other status codes (e.g. INFO_OUTPUT_BUFFERS_CHANGED)
+                        outputBufferIndex = localEncoder.dequeueOutputBuffer(bufferInfo, timeoutUs)
+                    }
+                }
 
                 // 3. Pre-allocate buffer for YUV data (Y size + UV size)
                 val yuvBuffer = ByteArray(width * height * 3 / 2)
@@ -87,74 +143,52 @@ class VideoGenerator @Inject constructor(
                             drawDateOverlay(bitmap, photo.timestamp, dateFontSize, dateFormat)
                         }
 
-                        // Convert ARGB Bitmap to YUV420SP (NV21)
+                        // Convert ARGB Bitmap to YUV420SP (NV12)
                         val argb = IntArray(width * height)
                         bitmap.getPixels(argb, 0, width, 0, 0, width, height)
                         encodeYUV420SP(yuvBuffer, argb, width, height)
 
                         // Feed to Encoder
-                        val inputBufferIndex = encoder.dequeueInputBuffer(10_000)
+                        val inputBufferIndex = localEncoder.dequeueInputBuffer(10_000)
                         if (inputBufferIndex >= 0) {
-                            val inputBuffer = encoder.getInputBuffer(inputBufferIndex)!!
-                            inputBuffer.clear()
-                            inputBuffer.put(yuvBuffer)
-                            encoder.queueInputBuffer(inputBufferIndex, 0, yuvBuffer.size, presentationTimeUs, 0)
-                            presentationTimeUs += frameDurationUs
+                            localEncoder.getInputBuffer(inputBufferIndex)?.let { inputBuffer ->
+                                inputBuffer.clear()
+                                inputBuffer.put(yuvBuffer)
+                                localEncoder.queueInputBuffer(inputBufferIndex, 0, yuvBuffer.size, presentationTimeUs, 0)
+                                presentationTimeUs += frameDurationUs
+                            }
                         }
                         bitmap.recycle()
                     }
 
-                    // Drain Output
-                    var outputBufferIndex = encoder.dequeueOutputBuffer(bufferInfo, 0)
-                    while (outputBufferIndex >= 0) {
-                        val outputBuffer = encoder.getOutputBuffer(outputBufferIndex)!!
-                        if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) {
-                            bufferInfo.size = 0
-                        }
-                        if (bufferInfo.size != 0) {
-                            if (!muxerStarted) {
-                                trackIndex = mediaMuxer.addTrack(encoder.outputFormat)
-                                mediaMuxer.start()
-                                muxerStarted = true
-                            }
-                            outputBuffer.position(bufferInfo.offset)
-                            outputBuffer.limit(bufferInfo.offset + bufferInfo.size)
-                            mediaMuxer.writeSampleData(trackIndex, outputBuffer, bufferInfo)
-                        }
-                        encoder.releaseOutputBuffer(outputBufferIndex, false)
-                        outputBufferIndex = encoder.dequeueOutputBuffer(bufferInfo, 0)
-                    }
+                    // Regular Drain
+                    drainEncoder(endOfStream = false)
                 }
 
                 // End of Stream
-                val inputIndex = encoder.dequeueInputBuffer(10_000)
+                val inputIndex = localEncoder.dequeueInputBuffer(10_000)
                 if (inputIndex >= 0) {
-                    encoder.queueInputBuffer(inputIndex, 0, 0, presentationTimeUs, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                    localEncoder.queueInputBuffer(inputIndex, 0, 0, presentationTimeUs, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
                 }
 
                 // Final Drain
-                var outputIndex = encoder.dequeueOutputBuffer(bufferInfo, 10_000)
-                while (outputIndex >= 0) {
-                     val outputBuffer = encoder.getOutputBuffer(outputIndex)!!
-                     if (bufferInfo.size != 0 && muxerStarted) {
-                        outputBuffer.position(bufferInfo.offset)
-                        outputBuffer.limit(bufferInfo.offset + bufferInfo.size)
-                        mediaMuxer.writeSampleData(trackIndex, outputBuffer, bufferInfo)
-                     }
-                     encoder.releaseOutputBuffer(outputIndex, false)
-                     outputIndex = encoder.dequeueOutputBuffer(bufferInfo, 0)
-                }
+                drainEncoder(endOfStream = true)
 
-                encoder.stop()
-                encoder.release()
-                if (muxerStarted) mediaMuxer.stop()
-                mediaMuxer.release()
-
-                true
+                success = true
             } catch (e: Exception) {
-                e.printStackTrace()
-                false
+                Log.e("VideoGenerator", "Error generating video", e)
+                success = false
+            } finally {
+                safeCleanup({ encoder?.stop() }, "Error stopping encoder")
+                safeCleanup({ encoder?.release() }, "Error releasing encoder")
+                safeCleanup({
+                    if (muxerStarted) {
+                        mediaMuxer?.stop()
+                    }
+                }, "Error stopping muxer")
+                safeCleanup({ mediaMuxer?.release() }, "Error releasing muxer")
             }
+            success
         }
     }
 
@@ -164,7 +198,7 @@ class VideoGenerator @Inject constructor(
         isDateOverlayEnabled: Boolean,
         dateFontSize: Int,
         dateFormat: String,
-        targetWidth: Int = 480, // Smaller default for GIF
+        targetWidth: Int = 480,
         targetHeight: Int = 854,
         fps: Int = 10
     ): Boolean {
@@ -180,7 +214,6 @@ class VideoGenerator @Inject constructor(
                 for (photo in photos) {
                      if (!isActive()) break
 
-                    // Load and process bitmap
                     val bitmap = loadBitmap(
                         Uri.parse(photo.originalUri),
                         targetWidth,
@@ -215,52 +248,6 @@ class VideoGenerator @Inject constructor(
         return res
     }
 
-    // Standard NV21 conversion with Blue Tint Fix (Swapped R and B usage)
-    private fun encodeYUV420SP(yuv420sp: ByteArray, argb: IntArray, width: Int, height: Int) {
-        val frameSize = width * height
-        var yIndex = 0
-        var uvIndex = frameSize
-        var r: Int
-        var g: Int
-        var b: Int
-        var Y: Int
-        var U: Int
-        var V: Int
-        var index = 0
-
-        for (j in 0 until height) {
-            for (i in 0 until width) {
-                // Extract R, G, B assuming ARGB_8888
-                val pixel = argb[index]
-                r = (pixel and 0xff0000) shr 16
-                g = (pixel and 0xff00) shr 8
-                b = (pixel and 0xff)
-
-                // Fix: Swap R and B in calculations to fix Blue Tint issue
-                // BT.601 conversion using B where R was expected, and R where B was expected
-                // Original: Y = 66*R + 129*G + 25*B ...
-                // Swapped:  Y = 66*B + 129*G + 25*R ...
-
-                val R = b // Swap logic
-                val B = r
-                val G = g
-
-                Y = ((66 * R + 129 * G + 25 * B + 128) shr 8) + 16
-                U = ((-38 * R - 74 * G + 112 * B + 128) shr 8) + 128
-                V = ((112 * R - 94 * G - 18 * B + 128) shr 8) + 128
-
-                yuv420sp[yIndex++] = (if (Y < 0) 0 else if (Y > 255) 255 else Y).toByte()
-
-                // NV21 interleaves V and U (V first)
-                if (j % 2 == 0 && index % 2 == 0) {
-                    yuv420sp[uvIndex++] = (if (V < 0) 0 else if (V > 255) 255 else V).toByte()
-                    yuv420sp[uvIndex++] = (if (U < 0) 0 else if (U > 255) 255 else U).toByte()
-                }
-                index++
-            }
-        }
-    }
-
     private fun isActive(): Boolean = true
 
     private fun loadBitmap(
@@ -270,10 +257,9 @@ class VideoGenerator @Inject constructor(
         faceX: Float?,
         faceY: Float?,
         faceW: Float?,
-        faceH: Float? // Added faceHeight
+        faceH: Float?
     ): Bitmap? {
         return try {
-             // 1. Get Rotation and Decode Bitmap efficiently from FileDescriptor
              var rotationInDegrees = 0
              val bitmap = context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
                  val fileDescriptor = pfd.fileDescriptor
@@ -290,12 +276,11 @@ class VideoGenerator @Inject constructor(
                          else -> 0
                      }
                  } catch (e: Exception) {
-                     android.util.Log.e("VideoGenerator", "Error reading Exif", e)
+                     Log.e("VideoGenerator", "Error reading Exif", e)
                  }
                  BitmapFactory.decodeFileDescriptor(fileDescriptor)
              } ?: return null
 
-             // 2. Rotate Bitmap if needed
              val rotatedBitmap = if (rotationInDegrees != 0) {
                  val matrix = android.graphics.Matrix()
                  matrix.postRotate(rotationInDegrees.toFloat())
@@ -308,31 +293,27 @@ class VideoGenerator @Inject constructor(
                  bitmap
              }
 
-             // Calculate scale needed to fill target dimensions
              val scale = Math.max(targetW.toFloat() / rotatedBitmap.width, targetH.toFloat() / rotatedBitmap.height)
              val scaledW = (rotatedBitmap.width * scale).roundToInt()
              val scaledH = (rotatedBitmap.height * scale).roundToInt()
 
              val scaledBitmap = Bitmap.createScaledBitmap(rotatedBitmap, scaledW, scaledH, true)
 
-             // Default: Center Crop
              var cropX = (scaledW - targetW) / 2
              var cropY = (scaledH - targetH) / 2
 
-             // If Face data exists, Center on Face
              if (faceX != null && faceY != null && faceW != null && faceH != null) {
                   val sFaceX = faceX * scale
                   val sFaceY = faceY * scale
                   val sFaceW = faceW * scale
-                  val sFaceH = faceH * scale // Use height
+                  val sFaceH = faceH * scale
 
                   val faceCenterX = sFaceX + (sFaceW / 2)
-                  val faceCenterY = sFaceY + (sFaceH / 2) // Use height for Y center
+                  val faceCenterY = sFaceY + (sFaceH / 2)
 
                   cropX = (faceCenterX - targetW / 2).toInt().coerceIn(0, scaledW - targetW)
                   cropY = (faceCenterY - targetH / 2).toInt().coerceIn(0, scaledH - targetH)
              } else if (faceX != null && faceY != null && faceW != null) {
-                  // Fallback if faceH missing (old data?)
                   val sFaceX = faceX * scale
                   val sFaceY = faceY * scale
                   val sFaceW = faceW * scale
@@ -348,7 +329,6 @@ class VideoGenerator @Inject constructor(
              if (finalBitmap != scaledBitmap && scaledBitmap != rotatedBitmap) scaledBitmap.recycle()
              if (finalBitmap != rotatedBitmap) rotatedBitmap.recycle()
 
-             // Ensure mutable for Canvas drawing
              val mutableBitmap = finalBitmap.copy(Bitmap.Config.ARGB_8888, true)
              if (mutableBitmap != finalBitmap) finalBitmap.recycle()
 
@@ -363,7 +343,7 @@ class VideoGenerator @Inject constructor(
         val canvas = Canvas(bitmap)
         val paint = Paint().apply {
             color = Color.WHITE
-            textSize = if (fontSize > 0) fontSize.toFloat() else 60f // Ensure reasonable default
+            textSize = if (fontSize > 0) fontSize.toFloat() else 60f
             isAntiAlias = true
             setShadowLayer(5f, 0f, 0f, Color.BLACK)
             textAlign = Paint.Align.CENTER
@@ -378,5 +358,52 @@ class VideoGenerator @Inject constructor(
         val x = bitmap.width / 2f
         val y = bitmap.height - 100f
         canvas.drawText(dateString, x, y, paint)
+    }
+
+    companion object {
+        private const val BT601_Y_R = 66
+        private const val BT601_Y_G = 129
+        private const val BT601_Y_B = 25
+        private const val BT601_U_R = -38
+        private const val BT601_U_G = -74
+        private const val BT601_U_B = 112
+        private const val BT601_V_R = 112
+        private const val BT601_V_G = -94
+        private const val BT601_V_B = -18
+
+        // NV12 conversion (YUV 4:2:0 Semi-Planar, U then V)
+        // Made internal/visible for testing
+        // TODO: This pure Kotlin implementation is a performance bottleneck.
+        //  Consider replacing with RenderScript (deprecated) or Native Code (JNI/NDK) with libyuv
+        //  for high-resolution video encoding.
+        internal fun encodeYUV420SP(yuv420sp: ByteArray, argb: IntArray, width: Int, height: Int) {
+            val frameSize = width * height
+            var yIndex = 0
+            var uvIndex = frameSize
+            var index = 0
+
+            for (j in 0 until height) {
+                for (i in 0 until width) {
+                    val pixel = argb[index]
+                    val r = (pixel and 0xff0000) shr 16
+                    val g = (pixel and 0xff00) shr 8
+                    val b = (pixel and 0xff)
+
+                    // Standard BT.601 conversion
+                    val Y = ((BT601_Y_R * r + BT601_Y_G * g + BT601_Y_B * b + 128) shr 8) + 16
+                    val U = ((BT601_U_R * r + BT601_U_G * g + BT601_U_B * b + 128) shr 8) + 128
+                    val V = ((BT601_V_R * r + BT601_V_G * g + BT601_V_B * b + 128) shr 8) + 128
+
+                    yuv420sp[yIndex++] = Y.coerceIn(0, 255).toByte()
+
+                    // NV12 interleaves U and V (U first)
+                    if (j % 2 == 0 && i % 2 == 0) {
+                        yuv420sp[uvIndex++] = U.coerceIn(0, 255).toByte()
+                        yuv420sp[uvIndex++] = V.coerceIn(0, 255).toByte()
+                    }
+                    index++
+                }
+            }
+        }
     }
 }
