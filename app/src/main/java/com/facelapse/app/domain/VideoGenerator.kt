@@ -87,7 +87,8 @@ class VideoGenerator @Inject constructor(
                             localMuxer.start()
                             muxerStarted = true
                         } else if (outputBufferIndex >= 0) {
-                            localEncoder.getOutputBuffer(outputBufferIndex)?.let { outputBuffer ->
+                            val outputBuffer = localEncoder.getOutputBuffer(outputBufferIndex)
+                            if (outputBuffer != null) {
                                 if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) {
                                     // The codec config data was pulled out and fed to the muxer when we got
                                     // the INFO_OUTPUT_FORMAT_CHANGED status. Ignore it.
@@ -102,8 +103,8 @@ class VideoGenerator @Inject constructor(
                                     outputBuffer.limit(bufferInfo.offset + bufferInfo.size)
                                     localMuxer.writeSampleData(trackIndex, outputBuffer, bufferInfo)
                                 }
-                                localEncoder.releaseOutputBuffer(outputBufferIndex, false)
                             }
+                            localEncoder.releaseOutputBuffer(outputBufferIndex, false)
                         }
                         // Ignore other status codes (e.g. INFO_OUTPUT_BUFFERS_CHANGED)
                         outputBufferIndex = localEncoder.dequeueOutputBuffer(bufferInfo, timeoutUs)
@@ -169,31 +170,22 @@ class VideoGenerator @Inject constructor(
                 Log.e("VideoGenerator", "Error generating video", e)
                 success = false
             } finally {
-                try {
-                    encoder?.stop()
-                } catch (e: Exception) {
-                    Log.e("VideoGenerator", "Error stopping encoder", e)
+                fun safeCleanup(action: () -> Unit, errorMessage: String) {
+                    try {
+                        action()
+                    } catch (e: Exception) {
+                        Log.e("VideoGenerator", errorMessage, e)
+                    }
                 }
 
-                try {
-                    encoder?.release()
-                } catch (e: Exception) {
-                    Log.e("VideoGenerator", "Error releasing encoder", e)
-                }
-
-                try {
+                safeCleanup({ encoder?.stop() }, "Error stopping encoder")
+                safeCleanup({ encoder?.release() }, "Error releasing encoder")
+                safeCleanup({
                     if (muxerStarted) {
                         mediaMuxer?.stop()
                     }
-                } catch (e: Exception) {
-                    Log.e("VideoGenerator", "Error stopping muxer", e)
-                }
-
-                try {
-                    mediaMuxer?.release()
-                } catch (e: Exception) {
-                    Log.e("VideoGenerator", "Error releasing muxer", e)
-                }
+                }, "Error stopping muxer")
+                safeCleanup({ mediaMuxer?.release() }, "Error releasing muxer")
             }
             success
         }
