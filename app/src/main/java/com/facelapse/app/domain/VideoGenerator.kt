@@ -24,7 +24,8 @@ import kotlin.math.roundToInt
 
 @Singleton
 class VideoGenerator @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val imageLoader: ImageLoader
 ) {
 
     suspend fun generateVideo(
@@ -262,38 +263,8 @@ class VideoGenerator @Inject constructor(
         faceH: Float?
     ): Bitmap? {
         return try {
-             var rotationInDegrees = 0
-             val bitmap = context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
-                 val fileDescriptor = pfd.fileDescriptor
-                 try {
-                     val exifInterface = ExifInterface(fileDescriptor)
-                     val orientation = exifInterface.getAttributeInt(
-                         ExifInterface.TAG_ORIENTATION,
-                         ExifInterface.ORIENTATION_NORMAL
-                     )
-                     rotationInDegrees = when (orientation) {
-                         ExifInterface.ORIENTATION_ROTATE_90 -> 90
-                         ExifInterface.ORIENTATION_ROTATE_180 -> 180
-                         ExifInterface.ORIENTATION_ROTATE_270 -> 270
-                         else -> 0
-                     }
-                 } catch (e: Exception) {
-                     Log.e("VideoGenerator", "Error reading Exif", e)
-                 }
-                 BitmapFactory.decodeFileDescriptor(fileDescriptor)
-             } ?: return null
-
-             val rotatedBitmap = if (rotationInDegrees != 0) {
-                 val matrix = android.graphics.Matrix()
-                 matrix.postRotate(rotationInDegrees.toFloat())
-                 val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
-                 if (rotated != bitmap) {
-                     bitmap.recycle()
-                 }
-                 rotated
-             } else {
-                 bitmap
-             }
+             // Use shared ImageLoader to get upright bitmap
+             val rotatedBitmap = imageLoader.loadUprightBitmap(uri) ?: return null
 
              val scale = Math.max(targetW.toFloat() / rotatedBitmap.width, targetH.toFloat() / rotatedBitmap.height)
              val scaledW = (rotatedBitmap.width * scale).roundToInt()

@@ -16,7 +16,8 @@ import javax.inject.Singleton
 
 @Singleton
 class FaceDetectorHelper @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val imageLoader: ImageLoader
 ) {
     private val detector = FaceDetection.getClient(
         FaceDetectorOptions.Builder()
@@ -29,13 +30,18 @@ class FaceDetectorHelper @Inject constructor(
     // Changed return type to List<Face>
     suspend fun detectFaces(uri: Uri): List<Face> {
         return withContext(Dispatchers.IO) {
+            val bitmap = imageLoader.loadUprightBitmap(uri) ?: return@withContext emptyList()
             try {
-                val inputImage = InputImage.fromFilePath(context, uri)
+                // InputImage.fromBitmap(bitmap, 0) because the bitmap is already upright
+                val inputImage = InputImage.fromBitmap(bitmap, 0)
                 val task = detector.process(inputImage)
-                Tasks.await(task) // Return list of faces
+                val faces = Tasks.await(task) // Return list of faces
+                faces
             } catch (e: Exception) {
-                e.printStackTrace()
+                android.util.Log.e("FaceDetectorHelper", "Error detecting faces", e)
                 emptyList()
+            } finally {
+                bitmap.recycle()
             }
         }
     }
