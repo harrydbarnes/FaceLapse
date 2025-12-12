@@ -16,16 +16,14 @@ class ImageLoader @Inject constructor(
 ) {
     fun loadUprightBitmap(uri: Uri): Bitmap? {
         return try {
-            var rotationInDegrees = 0
-            val bitmap = context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
-                val fileDescriptor = pfd.fileDescriptor
+            val rotationInDegrees = context.contentResolver.openInputStream(uri)?.use { inputStream ->
                 try {
-                    val exifInterface = ExifInterface(fileDescriptor)
+                    val exifInterface = ExifInterface(inputStream)
                     val orientation = exifInterface.getAttributeInt(
                         ExifInterface.TAG_ORIENTATION,
                         ExifInterface.ORIENTATION_NORMAL
                     )
-                    rotationInDegrees = when (orientation) {
+                    when (orientation) {
                         ExifInterface.ORIENTATION_ROTATE_90 -> 90
                         ExifInterface.ORIENTATION_ROTATE_180 -> 180
                         ExifInterface.ORIENTATION_ROTATE_270 -> 270
@@ -33,8 +31,12 @@ class ImageLoader @Inject constructor(
                     }
                 } catch (e: Exception) {
                     Log.e("ImageLoader", "Error reading Exif", e)
+                    0
                 }
-                BitmapFactory.decodeFileDescriptor(fileDescriptor)
+            } ?: 0
+
+            val bitmap = context.contentResolver.openInputStream(uri)?.use {
+                BitmapFactory.decodeStream(it)
             } ?: return null
 
             if (rotationInDegrees != 0) {
