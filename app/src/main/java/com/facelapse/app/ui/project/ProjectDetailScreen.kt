@@ -551,10 +551,11 @@ private fun findMatchingFace(faces: List<Face>, photo: PhotoEntity): Face? {
     val epsilon = 1.0f
     return faces.find { face ->
         val box = face.boundingBox
-        photo.faceX?.let { abs(it - box.left.toFloat()) < epsilon } ?: false &&
-                photo.faceY?.let { abs(it - box.top.toFloat()) < epsilon } ?: false &&
-                photo.faceWidth?.let { abs(it - box.width().toFloat()) < epsilon } ?: false &&
-                photo.faceHeight?.let { abs(it - box.height().toFloat()) < epsilon } ?: false
+        val xMatch = photo.faceX?.let { abs(it - box.left.toFloat()) < epsilon } ?: false
+        val yMatch = photo.faceY?.let { abs(it - box.top.toFloat()) < epsilon } ?: false
+        val widthMatch = photo.faceWidth?.let { abs(it - box.width().toFloat()) < epsilon } ?: false
+        val heightMatch = photo.faceHeight?.let { abs(it - box.height().toFloat()) < epsilon } ?: false
+        xMatch && yMatch && widthMatch && heightMatch
     }
 }
 

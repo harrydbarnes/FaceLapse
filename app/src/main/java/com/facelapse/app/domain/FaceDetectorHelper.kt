@@ -35,8 +35,7 @@ class FaceDetectorHelper @Inject constructor(
                 // InputImage.fromBitmap(bitmap, 0) because the bitmap is already upright
                 val inputImage = InputImage.fromBitmap(bitmap, 0)
                 val task = detector.process(inputImage)
-                val faces = Tasks.await(task) // Return list of faces
-                faces
+                Tasks.await(task) // Return list of faces
             } catch (e: Exception) {
                 android.util.Log.e("FaceDetectorHelper", "Error detecting faces", e)
                 emptyList()
