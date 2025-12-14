@@ -360,19 +360,6 @@ fun FaceSelectionDialog(
     // Track locally selected face for UI feedback before saving
     var selectedFace by remember { mutableStateOf<Face?>(null) }
 
-    // Initial load state matching logic
-    // We cannot easily match exact objects as they are different instances, so we match by coordinates
-    fun findMatchingFace(faces: List<Face>, photo: PhotoEntity): Face? {
-        val epsilon = 1.0f
-        return faces.find { face ->
-            val box = face.boundingBox
-            photo.faceX?.let { abs(it - box.left.toFloat()) < epsilon } ?: false &&
-            photo.faceY?.let { abs(it - box.top.toFloat()) < epsilon } ?: false &&
-            photo.faceWidth?.let { abs(it - box.width().toFloat()) < epsilon } ?: false &&
-            photo.faceHeight?.let { abs(it - box.height().toFloat()) < epsilon } ?: false
-        }
-    }
-
     // Load faces when dialog opens
     LaunchedEffect(photo) {
         val faces = viewModel.getFacesForPhoto(photo)
@@ -555,6 +542,19 @@ fun FaceSelectionDialog(
                 }
             }
         }
+    }
+}
+
+// Initial load state matching logic
+// We cannot easily match exact objects as they are different instances, so we match by coordinates
+private fun findMatchingFace(faces: List<Face>, photo: PhotoEntity): Face? {
+    val epsilon = 1.0f
+    return faces.find { face ->
+        val box = face.boundingBox
+        photo.faceX?.let { abs(it - box.left.toFloat()) < epsilon } ?: false &&
+                photo.faceY?.let { abs(it - box.top.toFloat()) < epsilon } ?: false &&
+                photo.faceWidth?.let { abs(it - box.width().toFloat()) < epsilon } ?: false &&
+                photo.faceHeight?.let { abs(it - box.height().toFloat()) < epsilon } ?: false
     }
 }
 
