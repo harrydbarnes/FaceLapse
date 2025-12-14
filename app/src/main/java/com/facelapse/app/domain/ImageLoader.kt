@@ -16,9 +16,14 @@ class ImageLoader @Inject constructor(
 ) {
     fun loadUprightBitmap(uri: Uri): Bitmap? {
         return try {
-            val rotationInDegrees = context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                try {
-                    val exifInterface = ExifInterface(inputStream)
+            context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                // Buffer the stream to allow mark/reset, which is needed to read EXIF and then decode
+                // from the same stream without reopening it.
+                val bufferedStream = inputStream.buffered()
+                bufferedStream.mark(Integer.MAX_VALUE) // Mark the beginning.
+
+                val rotationInDegrees = try {
+                    val exifInterface = ExifInterface(bufferedStream)
                     val orientation = exifInterface.getAttributeInt(
                         ExifInterface.TAG_ORIENTATION,
                         ExifInterface.ORIENTATION_NORMAL
@@ -30,28 +35,33 @@ class ImageLoader @Inject constructor(
                         else -> 0
                     }
                 } catch (e: Exception) {
-                    Log.e("ImageLoader", "Error reading Exif", e)
+                    Log.w("ImageLoader", "Could not read EXIF data from image: $uri", e)
                     0
                 }
-            } ?: 0
 
-            val bitmap = context.contentResolver.openInputStream(uri)?.use {
-                BitmapFactory.decodeStream(it)
-            } ?: return null
-
-            if (rotationInDegrees != 0) {
-                val matrix = android.graphics.Matrix()
-                matrix.postRotate(rotationInDegrees.toFloat())
-                val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
-                if (rotated != bitmap) {
-                    bitmap.recycle()
+                try {
+                    bufferedStream.reset() // Rewind the stream to the beginning.
+                } catch (e: java.io.IOException) {
+                    Log.e("ImageLoader", "Failed to reset stream, cannot decode bitmap.", e)
+                    return@use null
                 }
-                rotated
-            } else {
-                bitmap
+
+                val bitmap = BitmapFactory.decodeStream(bufferedStream) ?: return@use null
+
+                if (rotationInDegrees != 0) {
+                    val matrix = android.graphics.Matrix()
+                    matrix.postRotate(rotationInDegrees.toFloat())
+                    val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+                    if (rotated != bitmap) {
+                        bitmap.recycle()
+                    }
+                    rotated
+                } else {
+                    bitmap
+                }
             }
         } catch (e: Exception) {
-            Log.e("ImageLoader", "Error loading bitmap", e)
+            Log.e("ImageLoader", "Error loading bitmap from URI: $uri", e)
             null
         }
     }
