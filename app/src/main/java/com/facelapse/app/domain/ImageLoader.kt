@@ -50,8 +50,8 @@ class ImageLoader @Inject constructor(
             } else {
                 bitmap
             }
-        } catch (e: Exception) {
-            Log.e("ImageLoader", "Error loading bitmap from URI: $uri", e)
+        } catch (t: Throwable) {
+            Log.e("ImageLoader", "Error loading bitmap from URI: $uri", t)
             null
         }
     }
