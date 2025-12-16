@@ -1,5 +1,6 @@
 #include <jni.h>
 #include <string>
+#include <algorithm>
 
 // Standard BT.601 coefficients
 // Y = 0.257*R + 0.504*G + 0.098*B + 16
@@ -13,9 +14,7 @@
 
 // Helper function for clamping
 inline jbyte clamp(int value) {
-    if (value < 0) return 0;
-    if (value > 255) return 255;
-    return (jbyte)value;
+    return static_cast<jbyte>(std::clamp(value, 0, 255));
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -65,7 +64,6 @@ Java_com_facelapse_app_domain_VideoGenerator_encodeYUV420SP(
         return;
     }
 
-    int yIndex = 0;
     int uvIndex = frameSize;
     int index = 0;
 
@@ -80,7 +78,7 @@ Java_com_facelapse_app_domain_VideoGenerator_encodeYUV420SP(
 
             // Y
             int Y = ((66 * R + 129 * G + 25 * B + 128) >> 8) + 16;
-            yuv[yIndex++] = clamp(Y);
+            yuv[index] = clamp(Y);
 
             // NV12 interleaves U and V (U first)
             // Subsample: Calculate U/V only for even rows and columns
@@ -98,10 +96,7 @@ Java_com_facelapse_app_domain_VideoGenerator_encodeYUV420SP(
     }
 
     // Release critical arrays
-    if (pixels != nullptr) {
-        env->ReleasePrimitiveArrayCritical(argb, pixels, JNI_ABORT); // JNI_ABORT = release without copying back
-    }
-    if (yuv != nullptr) {
-        env->ReleasePrimitiveArrayCritical(yuv420sp, yuv, 0); // 0 = copy back and release
-    }
+    // nullptr checks removed as early returns handle null scenarios
+    env->ReleasePrimitiveArrayCritical(argb, pixels, JNI_ABORT); // JNI_ABORT = release without copying back
+    env->ReleasePrimitiveArrayCritical(yuv420sp, yuv, 0); // 0 = copy back and release
 }

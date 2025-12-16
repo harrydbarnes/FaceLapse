@@ -351,7 +351,12 @@ class VideoGenerator @Inject constructor(
         external fun encodeYUV420SP(yuv420sp: ByteArray, argb: IntArray, width: Int, height: Int)
 
         init {
-            System.loadLibrary("yuv_encoder")
+            try {
+                System.loadLibrary("yuv_encoder")
+            } catch (e: UnsatisfiedLinkError) {
+                Log.e("VideoGenerator", "Native library 'yuv_encoder' failed to load.", e)
+                throw e
+            }
         }
     }
 }
