@@ -37,9 +37,7 @@ class ProjectViewModel @Inject constructor(
 
     private val projectId: String = checkNotNull(savedStateHandle["projectId"])
 
-    // Fix: Make project flow reactive by observing all projects and filtering
-    val project: Flow<ProjectEntity?> = repository.getAllProjects()
-        .map { projects -> projects.find { it.id == projectId } }
+    val project: kotlinx.coroutines.flow.StateFlow<ProjectEntity?> = repository.getProjectFlow(projectId).stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), null)
 
     val photos = repository.getPhotosForProject(projectId)
 
