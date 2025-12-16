@@ -1,5 +1,4 @@
 #include <jni.h>
-#include <string>
 #include <algorithm>
 
 // Standard BT.601 coefficients
@@ -12,6 +11,16 @@
 // U = ((-38 * R - 74 * G + 112 * B + 128) >> 8) + 128
 // V = ((112 * R - 94 * G - 18 * B + 128) >> 8) + 128
 
+static const int BT601_Y_R = 66;
+static const int BT601_Y_G = 129;
+static const int BT601_Y_B = 25;
+static const int BT601_U_R = -38;
+static const int BT601_U_G = -74;
+static const int BT601_U_B = 112;
+static const int BT601_V_R = 112;
+static const int BT601_V_G = -94;
+static const int BT601_V_B = -18;
+
 // Helper function for clamping
 inline jbyte clamp(int value) {
     return static_cast<jbyte>(std::clamp(value, 0, 255));
@@ -20,7 +29,7 @@ inline jbyte clamp(int value) {
 extern "C" JNIEXPORT void JNICALL
 Java_com_facelapse_app_domain_VideoGenerator_encodeYUV420SP(
         JNIEnv* env,
-        jclass clazz,
+        [[maybe_unused]] jclass clazz,
         jbyteArray yuv420sp,
         jintArray argb,
         jint width,
@@ -29,9 +38,9 @@ Java_com_facelapse_app_domain_VideoGenerator_encodeYUV420SP(
     jbyte* yuv = nullptr;
     jint* pixels = nullptr;
 
-    // Use a cleanup label for guaranteed resource release
-    // This pattern helps prevent memory leaks in JNI functions
-    // where exceptions or early returns can bypass cleanup code.
+    // Get pointers to the Java arrays.
+    // We use GetPrimitiveArrayCritical for performance, which might pin the arrays
+    // and disable garbage collection. It's crucial to release the arrays promptly.
 
     jsize yuvLen = env->GetArrayLength(yuv420sp);
     jsize argbLen = env->GetArrayLength(argb);
@@ -77,15 +86,15 @@ Java_com_facelapse_app_domain_VideoGenerator_encodeYUV420SP(
             int B = pixel & 0xff;
 
             // Y
-            int Y = ((66 * R + 129 * G + 25 * B + 128) >> 8) + 16;
+            int Y = ((BT601_Y_R * R + BT601_Y_G * G + BT601_Y_B * B + 128) >> 8) + 16;
             yuv[index] = clamp(Y);
 
             // NV12 interleaves U and V (U first)
             // Subsample: Calculate U/V only for even rows and columns
             // Optimization: Use bitwise AND for parity check
             if (((j & 1) == 0) && ((i & 1) == 0)) {
-                int U = ((-38 * R - 74 * G + 112 * B + 128) >> 8) + 128;
-                int V = ((112 * R - 94 * G - 18 * B + 128) >> 8) + 128;
+                int U = ((BT601_U_R * R + BT601_U_G * G + BT601_U_B * B + 128) >> 8) + 128;
+                int V = ((BT601_V_R * R + BT601_V_G * G + BT601_V_B * B + 128) >> 8) + 128;
 
                 // NV12: U then V
                 yuv[uvIndex++] = clamp(U);
