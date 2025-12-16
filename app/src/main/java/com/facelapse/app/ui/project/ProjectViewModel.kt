@@ -37,7 +37,7 @@ class ProjectViewModel @Inject constructor(
 
     private val projectId: String = checkNotNull(savedStateHandle["projectId"])
 
-    val project: Flow<ProjectEntity?> = repository.getProjectFlow(projectId)
+    val project: kotlinx.coroutines.flow.StateFlow<ProjectEntity?> = repository.getProjectFlow(projectId).stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), null)
 
     val photos = repository.getPhotosForProject(projectId)
 
