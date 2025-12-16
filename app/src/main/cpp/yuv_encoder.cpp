@@ -20,6 +20,15 @@ Java_com_facelapse_app_domain_VideoGenerator_encodeYUV420SP(
         jint width,
         jint height) {
 
+    jbyte* yuv = nullptr;
+    jint* pixels = nullptr;
+
+    // Use a cleanup label for guaranteed resource release
+    // This pattern helps prevent memory leaks in JNI functions
+    // where exceptions or early returns can bypass cleanup code.
+    // The 'goto cleanup' statements are placed where an error
+    // prevents further processing but requires resources to be freed.
+
     jsize yuvLen = env->GetArrayLength(yuv420sp);
     jsize argbLen = env->GetArrayLength(argb);
     int frameSize = width * height;
@@ -27,12 +36,30 @@ Java_com_facelapse_app_domain_VideoGenerator_encodeYUV420SP(
 
     // Safety check: ensure arrays are large enough
     if (argbLen < frameSize || yuvLen < requiredYuvSize) {
-        // In a real app, might want to throw an exception here
-        return;
+        jclass illegalArgumentExceptionClass = env->FindClass("java/lang/IllegalArgumentException");
+        if (illegalArgumentExceptionClass != nullptr) {
+            env->ThrowNew(illegalArgumentExceptionClass, "Input arrays are not large enough for the given width and height.");
+        }
+        return; // No resources acquired yet, safe to return
     }
 
-    jbyte* yuv = env->GetByteArrayElements(yuv420sp, nullptr);
-    jint* pixels = env->GetIntArrayElements(argb, nullptr);
+    yuv = env->GetByteArrayElements(yuv420sp, nullptr);
+    if (yuv == nullptr) {
+        jclass oomExceptionClass = env->FindClass("java/lang/OutOfMemoryError");
+        if (oomExceptionClass != nullptr) {
+            env->ThrowNew(oomExceptionClass, "Failed to get byte array elements for yuv420sp.");
+        }
+        return; // yuv acquisition failed, no need to release anything yet
+    }
+
+    pixels = env->GetIntArrayElements(argb, nullptr);
+    if (pixels == nullptr) {
+        jclass oomExceptionClass = env->FindClass("java/lang/OutOfMemoryError");
+        if (oomExceptionClass != nullptr) {
+            env->ThrowNew(oomExceptionClass, "Failed to get int array elements for argb.");
+        }
+        goto cleanup; // pixels acquisition failed, jump to cleanup to release yuv
+    }
 
     int yIndex = 0;
     int uvIndex = frameSize;
@@ -74,6 +101,11 @@ Java_com_facelapse_app_domain_VideoGenerator_encodeYUV420SP(
         }
     }
 
-    env->ReleaseByteArrayElements(yuv420sp, yuv, 0); // 0 = copy back the changes
-    env->ReleaseIntArrayElements(argb, pixels, JNI_ABORT); // JNI_ABORT = don't copy back, we didn't change argb
+cleanup:
+    if (yuv != nullptr) {
+        env->ReleaseByteArrayElements(yuv420sp, yuv, 0); // 0 = copy back the changes
+    }
+    if (pixels != nullptr) {
+        env->ReleaseIntArrayElements(argb, pixels, JNI_ABORT); // JNI_ABORT = don't copy back, we didn't change argb
+    }
 }
