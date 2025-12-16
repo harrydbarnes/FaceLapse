@@ -37,9 +37,7 @@ class ProjectViewModel @Inject constructor(
 
     private val projectId: String = checkNotNull(savedStateHandle["projectId"])
 
-    // Fix: Make project flow reactive by observing all projects and filtering
-    val project: Flow<ProjectEntity?> = repository.getAllProjects()
-        .map { projects -> projects.find { it.id == projectId } }
+    val project: Flow<ProjectEntity?> = repository.getProjectFlow(projectId)
 
     val photos = repository.getPhotosForProject(projectId)
 
