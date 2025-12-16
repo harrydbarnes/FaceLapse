@@ -73,35 +73,44 @@ Java_com_facelapse_app_domain_VideoGenerator_encodeYUV420SP(
         return;
     }
 
-    int uvIndex = frameSize;
-    int index = 0;
+    int y_idx = 0;
+    int uv_idx = frameSize;
 
     // Native C++ implementation of ARGB to NV12 conversion.
+    // Process 2x2 pixel blocks for performance.
+    // This reduces loop overhead and eliminates the conditional branch for UV subsampling in the hot path.
+    // Safe because width and height are enforced multiples of 16 in VideoGenerator.kt.
 
-    for (int j = 0; j < height; ++j) {
-        for (int i = 0; i < width; ++i) {
-            int pixel = pixels[index];
-            int R = (pixel >> 16) & 0xff;
-            int G = (pixel >> 8) & 0xff;
-            int B = pixel & 0xff;
+    for (int j = 0; j < height; j += 2) {
+        for (int i = 0; i < width; i += 2) {
+            // Top-left pixel (i, j) - used for Y and UV
+            int p1 = pixels[y_idx + i];
+            int r1 = (p1 >> 16) & 0xff;
+            int g1 = (p1 >> 8) & 0xff;
+            int b1 = p1 & 0xff;
+            yuv[y_idx + i] = clamp(((BT601_Y_R * r1 + BT601_Y_G * g1 + BT601_Y_B * b1 + 128) >> 8) + 16);
 
-            // Y
-            int Y = ((BT601_Y_R * R + BT601_Y_G * G + BT601_Y_B * B + 128) >> 8) + 16;
-            yuv[index] = clamp(Y);
+            // Top-right pixel (i+1, j) - Y only
+            int p2 = pixels[y_idx + i + 1];
+            yuv[y_idx + i + 1] = clamp(((BT601_Y_R * ((p2 >> 16) & 0xff) + BT601_Y_G * ((p2 >> 8) & 0xff) + BT601_Y_B * (p2 & 0xff) + 128) >> 8) + 16);
 
-            // NV12 interleaves U and V (U first)
-            // Subsample: Calculate U/V only for even rows and columns
-            // Optimization: Use bitwise AND for parity check
-            if (((j & 1) == 0) && ((i & 1) == 0)) {
-                int U = ((BT601_U_R * R + BT601_U_G * G + BT601_U_B * B + 128) >> 8) + 128;
-                int V = ((BT601_V_R * R + BT601_V_G * G + BT601_V_B * B + 128) >> 8) + 128;
+            // Bottom-left pixel (i, j+1) - Y only
+            int p3 = pixels[y_idx + width + i];
+            yuv[y_idx + width + i] = clamp(((BT601_Y_R * ((p3 >> 16) & 0xff) + BT601_Y_G * ((p3 >> 8) & 0xff) + BT601_Y_B * (p3 & 0xff) + 128) >> 8) + 16);
 
-                // NV12: U then V
-                yuv[uvIndex++] = clamp(U);
-                yuv[uvIndex++] = clamp(V);
-            }
-            index++;
+            // Bottom-right pixel (i+1, j+1) - Y only
+            int p4 = pixels[y_idx + width + i + 1];
+            yuv[y_idx + width + i + 1] = clamp(((BT601_Y_R * ((p4 >> 16) & 0xff) + BT601_Y_G * ((p4 >> 8) & 0xff) + BT601_Y_B * (p4 & 0xff) + 128) >> 8) + 16);
+
+            // Subsample U and V from the top-left pixel of the 2x2 block.
+            // NV12 format: UV pairs are stored sequentially after the Y plane.
+            int u = ((BT601_U_R * r1 + BT601_U_G * g1 + BT601_U_B * b1 + 128) >> 8) + 128;
+            int v = ((BT601_V_R * r1 + BT601_V_G * g1 + BT601_V_B * b1 + 128) >> 8) + 128;
+
+            yuv[uv_idx++] = clamp(u);
+            yuv[uv_idx++] = clamp(v);
         }
+        y_idx += 2 * width;
     }
 
     // Release critical arrays
