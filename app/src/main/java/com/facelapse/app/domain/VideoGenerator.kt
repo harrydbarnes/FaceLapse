@@ -346,36 +346,16 @@ class VideoGenerator @Inject constructor(
 
         // NV12 conversion (YUV 4:2:0 Semi-Planar, U then V)
         // Made internal/visible for testing
-        // TODO: This pure Kotlin implementation is a performance bottleneck.
-        //  Consider replacing with RenderScript (deprecated) or Native Code (JNI/NDK) with libyuv
-        //  for high-resolution video encoding.
-        internal fun encodeYUV420SP(yuv420sp: ByteArray, argb: IntArray, width: Int, height: Int) {
-            val frameSize = width * height
-            var yIndex = 0
-            var uvIndex = frameSize
-            var index = 0
+        // Implemented in native code for performance.
+        @JvmStatic
+        external fun encodeYUV420SP(yuv420sp: ByteArray, argb: IntArray, width: Int, height: Int)
 
-            for (j in 0 until height) {
-                for (i in 0 until width) {
-                    val pixel = argb[index]
-                    val r = (pixel and 0xff0000) shr 16
-                    val g = (pixel and 0xff00) shr 8
-                    val b = (pixel and 0xff)
-
-                    // Standard BT.601 conversion
-                    val Y = ((BT601_Y_R * r + BT601_Y_G * g + BT601_Y_B * b + 128) shr 8) + 16
-                    val U = ((BT601_U_R * r + BT601_U_G * g + BT601_U_B * b + 128) shr 8) + 128
-                    val V = ((BT601_V_R * r + BT601_V_G * g + BT601_V_B * b + 128) shr 8) + 128
-
-                    yuv420sp[yIndex++] = Y.coerceIn(0, 255).toByte()
-
-                    // NV12 interleaves U and V (U first)
-                    if (j % 2 == 0 && i % 2 == 0) {
-                        yuv420sp[uvIndex++] = U.coerceIn(0, 255).toByte()
-                        yuv420sp[uvIndex++] = V.coerceIn(0, 255).toByte()
-                    }
-                    index++
-                }
+        init {
+            try {
+                System.loadLibrary("yuv_encoder")
+            } catch (e: UnsatisfiedLinkError) {
+                Log.e("VideoGenerator", "Native library 'yuv_encoder' failed to load.", e)
+                throw e
             }
         }
     }
