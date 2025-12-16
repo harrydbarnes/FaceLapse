@@ -357,9 +357,14 @@ fun FaceSelectionDialog(
     var isLoading by remember { mutableStateOf(true) }
     var containerSize by remember { mutableStateOf(IntSize.Zero) }
 
+    // Track locally selected face for UI feedback before saving
+    var selectedFace by remember { mutableStateOf<Face?>(null) }
+
     // Load faces when dialog opens
     LaunchedEffect(photo) {
-        detectedFaces = viewModel.getFacesForPhoto(photo)
+        val faces = viewModel.getFacesForPhoto(photo)
+        detectedFaces = faces
+        selectedFace = findMatchingFace(faces, photo)
         isLoading = false
     }
 
@@ -433,14 +438,14 @@ fun FaceSelectionDialog(
                                             }?.first
 
                                             if (clickedFace != null) {
-                                                viewModel.updateFaceSelection(photo, clickedFace)
+                                                selectedFace = clickedFace
                                             }
                                         }
                                     }
                             ) {
                                 mappedFaces.forEach { (face, rect) ->
                                     // Highlight if selected
-                                    val isSelected = isFaceSelected(photo, face)
+                                    val isSelected = face == selectedFace
 
                                     val strokeColor = if (isSelected) Color.Green else Color.White
                                     val strokeWidth = if (isSelected) 8.dp.toPx() else 4.dp.toPx()
@@ -487,12 +492,11 @@ fun FaceSelectionDialog(
                     ) {
                         // Kept for fallback or quick access
                         detectedFaces.forEachIndexed { index, face ->
-                            val isSelected = isFaceSelected(photo, face)
+                            val isSelected = face == selectedFace
 
                             Button(
                                 onClick = {
-                                    viewModel.updateFaceSelection(photo, face)
-                                    onDismiss()
+                                    selectedFace = face
                                 },
                                 modifier = Modifier.fillMaxHeight(),
                                 colors = if (isSelected) ButtonDefaults.buttonColors(
@@ -512,23 +516,46 @@ fun FaceSelectionDialog(
                     }
                 }
 
-                Button(
-                    onClick = onDismiss,
-                    modifier = Modifier.fillMaxWidth().padding(16.dp)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("Close")
+                    Button(
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                    ) {
+                        Text("Cancel")
+                    }
+                    Button(
+                        onClick = {
+                            selectedFace?.let { viewModel.updateFaceSelection(photo, it) }
+                            onDismiss()
+                        },
+                        modifier = Modifier.weight(1f),
+                        enabled = selectedFace != null
+                    ) {
+                        Text("Save Selection")
+                    }
                 }
             }
         }
     }
 }
 
-private fun isFaceSelected(photo: PhotoEntity, face: Face): Boolean {
-    val epsilon = 0.001f // Define a small tolerance for float comparison
-    return photo.faceX?.let { abs(it - face.boundingBox.left.toFloat()) < epsilon } ?: false &&
-            photo.faceY?.let { abs(it - face.boundingBox.top.toFloat()) < epsilon } ?: false &&
-            photo.faceWidth?.let { abs(it - face.boundingBox.width().toFloat()) < epsilon } ?: false &&
-            photo.faceHeight?.let { abs(it - face.boundingBox.height().toFloat()) < epsilon } ?: false
+// Initial load state matching logic
+// We cannot easily match exact objects as they are different instances, so we match by coordinates
+private fun findMatchingFace(faces: List<Face>, photo: PhotoEntity): Face? {
+    val epsilon = 1.0f
+    return faces.find { face ->
+        val box = face.boundingBox
+        (photo.faceX?.let { abs(it - box.left.toFloat()) < epsilon } ?: false) &&
+        (photo.faceY?.let { abs(it - box.top.toFloat()) < epsilon } ?: false) &&
+        (photo.faceWidth?.let { abs(it - box.width().toFloat()) < epsilon } ?: false) &&
+        (photo.faceHeight?.let { abs(it - box.height().toFloat()) < epsilon } ?: false)
+    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
