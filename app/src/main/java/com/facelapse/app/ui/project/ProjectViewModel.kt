@@ -40,7 +40,12 @@ class ProjectViewModel @Inject constructor(
 
     private val projectId: String = checkNotNull(savedStateHandle["projectId"])
 
-    val project: StateFlow<ProjectEntity?> = repository.getProjectFlow(projectId).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    val project: StateFlow<ProjectEntity?> = repository.getProjectFlow(projectId)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000L),
+            initialValue = null
+        )
 
     val photos = repository.getPhotosForProject(projectId)
 
