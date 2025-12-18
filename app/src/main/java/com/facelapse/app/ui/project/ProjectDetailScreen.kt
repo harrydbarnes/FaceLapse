@@ -10,6 +10,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -263,30 +267,65 @@ fun ProjectSettingsDialog(
                 Column {
                     Text("Export Format")
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(
-                            selected = !exportAsGif,
-                            onClick = { exportAsGif = false }
-                        )
-                        Text("Video (MP4)")
-                        Spacer(modifier = Modifier.width(16.dp))
-                        RadioButton(
-                            selected = exportAsGif,
-                            onClick = { exportAsGif = true }
-                        )
-                        Text("GIF")
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clip(MaterialTheme.shapes.small)
+                                .selectable(
+                                    selected = !exportAsGif,
+                                    onClick = { exportAsGif = false },
+                                    role = Role.RadioButton
+                                )
+                                .padding(end = 8.dp, top = 4.dp, bottom = 4.dp)
+                        ) {
+                            RadioButton(
+                                selected = !exportAsGif,
+                                onClick = null
+                            )
+                            Text("Video (MP4)")
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clip(MaterialTheme.shapes.small)
+                                .selectable(
+                                    selected = exportAsGif,
+                                    onClick = { exportAsGif = true },
+                                    role = Role.RadioButton
+                                )
+                                .padding(end = 8.dp, top = 4.dp, bottom = 4.dp)
+                        ) {
+                            RadioButton(
+                                selected = exportAsGif,
+                                onClick = null
+                            )
+                            Text("GIF")
+                        }
                     }
                 }
 
                 // Date Overlay
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(MaterialTheme.shapes.small)
+                        .toggleable(
+                            value = isDateOverlayEnabled,
+                            onValueChange = { isDateOverlayEnabled = it },
+                            role = Role.Switch
+                        )
+                        .padding(vertical = 4.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Date Overlay")
+                    Text("Date Overlay", modifier = Modifier.padding(start = 8.dp))
                     Switch(
                         checked = isDateOverlayEnabled,
-                        onCheckedChange = { isDateOverlayEnabled = it }
+                        onCheckedChange = null,
+                        modifier = Modifier.padding(end = 8.dp)
                     )
                 }
             }
