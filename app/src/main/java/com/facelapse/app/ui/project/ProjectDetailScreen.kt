@@ -290,13 +290,13 @@ fun ProjectSettingsDialog(
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
+                                .padding(end = 8.dp, top = 4.dp, bottom = 4.dp)
                                 .clip(MaterialTheme.shapes.small)
                                 .selectable(
                                     selected = exportAsGif,
                                     onClick = { exportAsGif = true },
                                     role = Role.RadioButton
                                 )
-                                .padding(end = 8.dp, top = 4.dp, bottom = 4.dp)
                         ) {
                             RadioButton(
                                 selected = exportAsGif,
