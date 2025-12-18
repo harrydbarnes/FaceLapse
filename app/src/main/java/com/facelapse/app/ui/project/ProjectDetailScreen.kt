@@ -166,7 +166,7 @@ fun ProjectDetailScreen(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    itemsIndexed(photos) { index, photo ->
+                    itemsIndexed(photos, key = { _, photo -> photo.id }) { index, photo ->
                         val isSelected = selectedPhotoIds.contains(photo.id)
                         PhotoItem(
                             photo = photo,
