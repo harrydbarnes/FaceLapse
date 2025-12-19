@@ -58,6 +58,13 @@ class ProjectViewModel @Inject constructor(
     private val _isGenerating = MutableStateFlow(false)
     val isGenerating = _isGenerating.asStateFlow()
 
+    private val _exportResult = MutableStateFlow<ExportResult?>(null)
+    val exportResult = _exportResult.asStateFlow()
+
+    fun clearExportResult() {
+        _exportResult.value = null
+    }
+
     fun toggleSelection(photoId: String) {
         _selectedPhotoIds.update { currentIds ->
             if (photoId in currentIds) {
@@ -203,9 +210,11 @@ class ProjectViewModel @Inject constructor(
 
             var success = false
             val outputFile: File
+            val mimeType: String
 
             if (projectEntity.exportAsGif) {
                 outputFile = File(context.cacheDir, "facelapse_${safeName}_${timestamp}.gif")
+                mimeType = "image/gif"
                 success = videoGenerator.generateGif(
                     photos = currentPhotos,
                     outputFile = outputFile,
@@ -216,6 +225,7 @@ class ProjectViewModel @Inject constructor(
                 )
             } else {
                 outputFile = File(context.cacheDir, "facelapse_${safeName}_${timestamp}.mp4")
+                mimeType = "video/mp4"
                 success = videoGenerator.generateVideo(
                     photos = currentPhotos,
                     outputFile = outputFile,
@@ -227,14 +237,14 @@ class ProjectViewModel @Inject constructor(
             }
 
             if (success) {
-                shareFile(context, outputFile, if (projectEntity.exportAsGif) "image/gif" else "video/mp4")
+                val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", outputFile)
+                _exportResult.value = ExportResult(outputFile, uri, mimeType)
             }
             _isGenerating.value = false
         }
     }
 
-    private fun shareFile(context: Context, file: File, mimeType: String) {
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+    fun shareFile(context: Context, uri: Uri, mimeType: String) {
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = mimeType
             putExtra(Intent.EXTRA_STREAM, uri)

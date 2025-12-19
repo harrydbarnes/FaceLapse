@@ -19,11 +19,15 @@ import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
+import androidx.compose.runtime.remember
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.navigation
 import androidx.navigation.navArgument
 import com.facelapse.app.ui.home.HomeScreen
+import com.facelapse.app.ui.project.FaceAuditScreen
 import com.facelapse.app.ui.project.ProjectDetailScreen
 import com.facelapse.app.ui.settings.SettingsScreen
 
@@ -107,20 +111,45 @@ fun NavHostContainer(navController: NavHostController, modifier: Modifier = Modi
         composable(Screen.Home.route) {
             HomeScreen(
                 onProjectClick = { projectId ->
-                    navController.navigate(Screen.ProjectDetails.createRoute(projectId))
+                    navController.navigate(Screen.ProjectGraph.createRoute(projectId))
                 },
                 onSettingsClick = {
                     navController.navigate(Screen.Settings.route)
                 }
             )
         }
-        composable(
-            route = Screen.ProjectDetails.route,
+
+        navigation(
+            route = Screen.ProjectGraph.route,
+            startDestination = Screen.ProjectDetails.route,
             arguments = listOf(navArgument("projectId") { type = NavType.StringType })
         ) {
-            ProjectDetailScreen(
-                onBackClick = { navController.popBackStack() }
-            )
+            composable(Screen.ProjectDetails.route) { backStackEntry ->
+                val parentEntry = remember(backStackEntry) {
+                    navController.getBackStackEntry(Screen.ProjectGraph.route)
+                }
+                val viewModel: ProjectViewModel = hiltViewModel(parentEntry)
+
+                ProjectDetailScreen(
+                    viewModel = viewModel,
+                    onBackClick = { navController.popBackStack() },
+                    onNavigateToFaceAudit = {
+                        navController.navigate(Screen.FaceAudit.route)
+                    }
+                )
+            }
+
+            composable(Screen.FaceAudit.route) { backStackEntry ->
+                val parentEntry = remember(backStackEntry) {
+                    navController.getBackStackEntry(Screen.ProjectGraph.route)
+                }
+                val viewModel: ProjectViewModel = hiltViewModel(parentEntry)
+
+                FaceAuditScreen(
+                    viewModel = viewModel,
+                    onBackClick = { navController.popBackStack() }
+                )
+            }
         }
         composable(Screen.Settings.route) {
             SettingsScreen(

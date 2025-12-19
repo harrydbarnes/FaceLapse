@@ -42,11 +42,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImagePainter
 import coil.compose.rememberAsyncImagePainter
+import coil.decode.ImageDecoderDecoder
+import coil.request.ImageRequest
 import com.facelapse.app.data.local.entity.PhotoEntity
 import com.facelapse.app.data.local.entity.ProjectEntity
 import com.google.mlkit.vision.face.Face
@@ -57,14 +60,16 @@ import kotlin.math.min
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProjectDetailScreen(
-    viewModel: ProjectViewModel = hiltViewModel(),
-    onBackClick: () -> Unit
+    viewModel: ProjectViewModel,
+    onBackClick: () -> Unit,
+    onNavigateToFaceAudit: (String) -> Unit = {}
 ) {
     val project by viewModel.project.collectAsState(initial = null)
     val photos by viewModel.photos.collectAsState(initial = emptyList())
     val isProcessing by viewModel.isProcessing.collectAsState()
     val isGenerating by viewModel.isGenerating.collectAsState()
     val selectedPhotoIds by viewModel.selectedPhotoIds.collectAsState()
+    val exportResult by viewModel.exportResult.collectAsState()
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -121,6 +126,13 @@ fun ProjectDetailScreen(
                             enabled = !isProcessing && photos.isNotEmpty()
                         ) {
                             Icon(Icons.Default.Face, contentDescription = "Align Faces")
+                        }
+                        // Face Audit
+                         IconButton(
+                            onClick = { project?.id?.let { onNavigateToFaceAudit(it) } },
+                            enabled = !isProcessing && photos.isNotEmpty()
+                        ) {
+                            Icon(Icons.Default.AccountBox, contentDescription = "View Detected Faces")
                         }
                         IconButton(
                             onClick = { showSettingsDialog = true },
@@ -233,6 +245,17 @@ fun ProjectDetailScreen(
                 }
             )
         }
+    }
+
+    // Preview Dialog
+    exportResult?.let { result ->
+        PreviewDialog(
+            result = result,
+            onDismiss = { viewModel.clearExportResult() },
+            onShare = {
+                viewModel.shareFile(context, result.uri, result.mimeType)
+            }
+        )
     }
 }
 
@@ -384,6 +407,85 @@ fun RenameProjectDialog(
             Button(onClick = onDismiss) { Text("Cancel") }
         }
     )
+}
+
+@Composable
+fun PreviewDialog(
+    result: ExportResult,
+    onDismiss: () -> Unit,
+    onShare: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+        ) {
+            Column(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .background(Color.Black),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (result.mimeType.startsWith("video/")) {
+                        val context = LocalContext.current
+                        val videoView = remember { android.widget.VideoView(context) }
+                        AndroidView(factory = { videoView }, modifier = Modifier.fillMaxSize())
+                        DisposableEffect(result.uri) {
+                            videoView.setVideoURI(result.uri)
+                            videoView.setOnCompletionListener { it.start() }
+                            videoView.start()
+                            onDispose {
+                                videoView.stopPlayback()
+                            }
+                        }
+                    } else {
+                        // GIF
+                         Image(
+                            painter = rememberAsyncImagePainter(
+                                ImageRequest.Builder(LocalContext.current)
+                                    .data(result.uri)
+                                    .decoderFactory(ImageDecoderDecoder.Factory())
+                                    .build()
+                            ),
+                            contentDescription = "Preview",
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f),
+                         colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.secondary
+                        )
+                    ) {
+                        Text("Close")
+                    }
+                    Button(
+                        onClick = onShare,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Share")
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -581,19 +683,6 @@ fun FaceSelectionDialog(
                 }
             }
         }
-    }
-}
-
-// Initial load state matching logic
-// We cannot easily match exact objects as they are different instances, so we match by coordinates
-private fun findMatchingFace(faces: List<Face>, photo: PhotoEntity): Face? {
-    val epsilon = 1.0f
-    return faces.find { face ->
-        val box = face.boundingBox
-        (photo.faceX?.let { abs(it - box.left.toFloat()) < epsilon } ?: false) &&
-        (photo.faceY?.let { abs(it - box.top.toFloat()) < epsilon } ?: false) &&
-        (photo.faceWidth?.let { abs(it - box.width().toFloat()) < epsilon } ?: false) &&
-        (photo.faceHeight?.let { abs(it - box.height().toFloat()) < epsilon } ?: false)
     }
 }
 
