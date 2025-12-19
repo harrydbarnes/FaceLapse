@@ -26,7 +26,6 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImagePainter
 import coil.compose.rememberAsyncImagePainter
 import com.facelapse.app.data.local.entity.PhotoEntity
@@ -38,7 +37,7 @@ import kotlin.math.min
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun FaceAuditScreen(
-    viewModel: ProjectViewModel = hiltViewModel(),
+    viewModel: ProjectViewModel,
     onBackClick: () -> Unit
 ) {
     val photos by viewModel.photos.collectAsState(initial = emptyList())
@@ -256,17 +255,5 @@ fun FaceAuditItem(
                 }
             }
         }
-    }
-}
-
-// Duplicated from ProjectDetailScreen (should be moved to Utils or Helper)
-private fun findMatchingFace(faces: List<Face>, photo: PhotoEntity): Face? {
-    val epsilon = 1.0f
-    return faces.find { face ->
-        val box = face.boundingBox
-        (photo.faceX?.let { abs(it - box.left.toFloat()) < epsilon } ?: false) &&
-        (photo.faceY?.let { abs(it - box.top.toFloat()) < epsilon } ?: false) &&
-        (photo.faceWidth?.let { abs(it - box.width().toFloat()) < epsilon } ?: false) &&
-        (photo.faceHeight?.let { abs(it - box.height().toFloat()) < epsilon } ?: false)
     }
 }

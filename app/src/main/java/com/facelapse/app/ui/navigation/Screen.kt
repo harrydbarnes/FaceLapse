@@ -8,10 +8,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 sealed class Screen(val route: String, val title: String, val icon: ImageVector? = null) {
     object Home : Screen("home", "Home", Icons.Default.Home)
     object Settings : Screen("settings", "Settings", Icons.Default.Settings)
-    object ProjectDetails : Screen("project/{projectId}", "Project") {
-        fun createRoute(projectId: String) = "project/$projectId"
+    object ProjectGraph : Screen("project_graph/{projectId}", "Project Graph") {
+        fun createRoute(projectId: String) = "project_graph/$projectId"
     }
-    object FaceAudit : Screen("project/{projectId}/faces", "Face Audit") {
-        fun createRoute(projectId: String) = "project/$projectId/faces"
-    }
+    object ProjectDetails : Screen("project_overview", "Project")
+    object FaceAudit : Screen("face_audit", "Face Audit")
 }
