@@ -29,6 +29,7 @@ import androidx.navigation.navArgument
 import com.facelapse.app.ui.home.HomeScreen
 import com.facelapse.app.ui.project.FaceAuditScreen
 import com.facelapse.app.ui.project.ProjectDetailScreen
+import com.facelapse.app.ui.project.ProjectViewModel
 import com.facelapse.app.ui.settings.SettingsScreen
 
 @Composable
