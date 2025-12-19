@@ -24,6 +24,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.navArgument
 import com.facelapse.app.ui.home.HomeScreen
+import com.facelapse.app.ui.project.FaceAuditScreen
 import com.facelapse.app.ui.project.ProjectDetailScreen
 import com.facelapse.app.ui.settings.SettingsScreen
 
@@ -119,6 +120,17 @@ fun NavHostContainer(navController: NavHostController, modifier: Modifier = Modi
             arguments = listOf(navArgument("projectId") { type = NavType.StringType })
         ) {
             ProjectDetailScreen(
+                onBackClick = { navController.popBackStack() },
+                onNavigateToFaceAudit = { projectId ->
+                    navController.navigate(Screen.FaceAudit.createRoute(projectId))
+                }
+            )
+        }
+        composable(
+            route = Screen.FaceAudit.route,
+            arguments = listOf(navArgument("projectId") { type = NavType.StringType })
+        ) {
+            FaceAuditScreen(
                 onBackClick = { navController.popBackStack() }
             )
         }

@@ -11,4 +11,7 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector?
     object ProjectDetails : Screen("project/{projectId}", "Project") {
         fun createRoute(projectId: String) = "project/$projectId"
     }
+    object FaceAudit : Screen("project/{projectId}/faces", "Face Audit") {
+        fun createRoute(projectId: String) = "project/$projectId/faces"
+    }
 }
