@@ -435,16 +435,17 @@ fun PreviewDialog(
                     contentAlignment = Alignment.Center
                 ) {
                     if (result.mimeType.startsWith("video/")) {
-                        AndroidView(
-                            factory = { context ->
-                                android.widget.VideoView(context).apply {
-                                    setVideoURI(result.uri)
-                                    start()
-                                    setOnCompletionListener { start() } // Loop
-                                }
-                            },
-                            modifier = Modifier.fillMaxSize()
-                        )
+                        val context = LocalContext.current
+                        val videoView = remember { android.widget.VideoView(context) }
+                        AndroidView(factory = { videoView }, modifier = Modifier.fillMaxSize())
+                        DisposableEffect(result.uri) {
+                            videoView.setVideoURI(result.uri)
+                            videoView.setOnCompletionListener { it.start() }
+                            videoView.start()
+                            onDispose {
+                                videoView.stopPlayback()
+                            }
+                        }
                     } else {
                         // GIF
                          Image(
