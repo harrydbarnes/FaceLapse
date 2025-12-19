@@ -7,6 +7,8 @@ import android.net.Uri
 import android.util.Log
 import androidx.exifinterface.media.ExifInterface
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.io.File
+import java.io.FileOutputStream
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -24,14 +26,27 @@ class ImageLoader @Inject constructor(
     }
 
     fun loadOptimizedBitmap(uri: Uri, reqWidth: Int? = null, reqHeight: Int? = null): LoadedBitmap? {
+        val tempFile = try {
+            File.createTempFile("image_load_", ".tmp", context.cacheDir)
+        } catch (e: Exception) {
+            Log.e("ImageLoader", "Failed to create temp file", e)
+            return null
+        }
+
         return try {
-            val rotationInDegrees = getRotation(uri)
+            // Copy URI content to temp file to avoid opening multiple input streams
+            // (crucial for cloud-backed URIs)
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                FileOutputStream(tempFile).use { output ->
+                    input.copyTo(output)
+                }
+            } ?: return null
+
+            val rotationInDegrees = getRotation(tempFile)
 
             val options = BitmapFactory.Options()
             options.inJustDecodeBounds = true
-            context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                BitmapFactory.decodeStream(inputStream, null, options)
-            } ?: return null
+            BitmapFactory.decodeFile(tempFile.absolutePath, options)
 
             var inSampleSize = 1
             if (reqWidth != null && reqHeight != null) {
@@ -47,9 +62,7 @@ class ImageLoader @Inject constructor(
             options.inJustDecodeBounds = false
             options.inSampleSize = inSampleSize
 
-            val bitmap = context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                BitmapFactory.decodeStream(inputStream, null, options)
-            } ?: return null
+            val bitmap = BitmapFactory.decodeFile(tempFile.absolutePath, options) ?: return null
 
             val rotated = if (rotationInDegrees != 0) {
                 val matrix = android.graphics.Matrix()
@@ -63,30 +76,33 @@ class ImageLoader @Inject constructor(
                 bitmap
             }
             LoadedBitmap(rotated, inSampleSize)
+
         } catch (t: Throwable) {
             Log.e("ImageLoader", "Error loading bitmap from URI: $uri", t)
             null
+        } finally {
+            if (tempFile.exists()) {
+                tempFile.delete()
+            }
         }
     }
 
-    private fun getRotation(uri: Uri): Int {
-        return context.contentResolver.openInputStream(uri)?.use { inputStream ->
-            try {
-                val exifInterface = ExifInterface(inputStream)
-                when (exifInterface.getAttributeInt(
-                    ExifInterface.TAG_ORIENTATION,
-                    ExifInterface.ORIENTATION_NORMAL
-                )) {
-                    ExifInterface.ORIENTATION_ROTATE_90 -> 90
-                    ExifInterface.ORIENTATION_ROTATE_180 -> 180
-                    ExifInterface.ORIENTATION_ROTATE_270 -> 270
-                    else -> 0
-                }
-            } catch (e: Exception) {
-                Log.w("ImageLoader", "Could not read EXIF data from image: $uri", e)
-                0
+    private fun getRotation(file: File): Int {
+        return try {
+            val exifInterface = ExifInterface(file.absolutePath)
+            when (exifInterface.getAttributeInt(
+                ExifInterface.TAG_ORIENTATION,
+                ExifInterface.ORIENTATION_NORMAL
+            )) {
+                ExifInterface.ORIENTATION_ROTATE_90 -> 90
+                ExifInterface.ORIENTATION_ROTATE_180 -> 180
+                ExifInterface.ORIENTATION_ROTATE_270 -> 270
+                else -> 0
             }
-        } ?: 0
+        } catch (e: Exception) {
+            Log.w("ImageLoader", "Could not read EXIF data from file: ${file.absolutePath}", e)
+            0
+        }
     }
 
     private fun calculateInSampleSize(width: Int, height: Int, reqWidth: Int, reqHeight: Int): Int {
