@@ -6,4 +6,7 @@
     <string name="settings_format_gif">GIF</string>
     <string name="settings_format_video">Video</string>
     <string name="action_delete">Delete</string>
+    <string name="empty_state_title">No photos yet</string>
+    <string name="empty_state_subtitle">Tap the + button to add your first photo</string>
+    <string name="empty_state_icon_desc">Empty project illustration</string>
 </resources>

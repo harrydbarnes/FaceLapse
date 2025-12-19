@@ -40,6 +40,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -47,12 +48,18 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImagePainter
 import coil.compose.rememberAsyncImagePainter
+import com.facelapse.app.R
 import com.facelapse.app.data.local.entity.PhotoEntity
 import com.facelapse.app.data.local.entity.ProjectEntity
 import com.google.mlkit.vision.face.Face
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.min
+
+private const val EMPTY_STATE_ICON_ALPHA = 0.2f
+private const val EMPTY_STATE_TEXT_ALPHA = 0.7f
+private val EMPTY_STATE_ICON_SIZE = 80.dp
+private val EMPTY_STATE_SPACER_HEIGHT = 8.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -167,22 +174,22 @@ fun ProjectDetailScreen(
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Face,
-                        contentDescription = null,
+                        contentDescription = stringResource(R.string.empty_state_icon_desc),
                         modifier = Modifier
-                            .size(80.dp)
+                            .size(EMPTY_STATE_ICON_SIZE)
                             .padding(bottom = 16.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f)
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = EMPTY_STATE_ICON_ALPHA)
                     )
                     Text(
-                        text = "No photos yet",
+                        text = stringResource(R.string.empty_state_title),
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(EMPTY_STATE_SPACER_HEIGHT))
                     Text(
-                        text = "Tap the + button to add your first photo",
+                        text = stringResource(R.string.empty_state_subtitle),
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = EMPTY_STATE_TEXT_ALPHA)
                     )
                 }
             } else {
