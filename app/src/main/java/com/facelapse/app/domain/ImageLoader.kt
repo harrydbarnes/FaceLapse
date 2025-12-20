@@ -63,7 +63,7 @@ class ImageLoader @Inject constructor(
                 BitmapFactory.decodeStream(inputStream, null, decodeOptions)
             } ?: return null
 
-            val rotatedBitmap = rotateBitmapIfNeeded(bitmap, rotationInDegrees) ?: return null
+            val rotatedBitmap = rotateBitmapIfNeeded(bitmap, rotationInDegrees)
 
             LoadedBitmap(rotatedBitmap, sampleSize)
         } catch (e: Exception) {
@@ -93,7 +93,7 @@ class ImageLoader @Inject constructor(
         } ?: 0
     }
 
-    private fun rotateBitmapIfNeeded(bitmap: Bitmap, rotationInDegrees: Int): Bitmap? {
+    private fun rotateBitmapIfNeeded(bitmap: Bitmap, rotationInDegrees: Int): Bitmap {
         return if (rotationInDegrees != 0) {
             val matrix = android.graphics.Matrix()
             matrix.postRotate(rotationInDegrees.toFloat())

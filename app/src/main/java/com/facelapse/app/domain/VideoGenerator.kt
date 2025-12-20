@@ -280,8 +280,8 @@ class VideoGenerator @Inject constructor(
                   // Adjust face coordinates for sampleSize
                   val sFaceX = (faceX / sampleSize) * scale
                   val sFaceY = (faceY / sampleSize) * scale
-                  val sFaceW = (faceWidthValue(faceW, sampleSize)) * scale
-                  val sFaceH = (faceHeightValue(faceH, sampleSize)) * scale
+                  val sFaceW = (faceW / sampleSize) * scale
+                  val sFaceH = (faceH / sampleSize) * scale
 
                   val faceCenterX = sFaceX + (sFaceW / 2)
                   val faceCenterY = sFaceY + (sFaceH / 2)
@@ -294,7 +294,7 @@ class VideoGenerator @Inject constructor(
 
                   val sFaceX = (faceX / sampleSize) * scale
                   val sFaceY = (faceY / sampleSize) * scale
-                  val sFaceW = (faceWidthValue(faceW, sampleSize)) * scale
+                  val sFaceW = (faceW / sampleSize) * scale
 
                   val faceCenterX = sFaceX + (sFaceW / 2)
                   val faceCenterY = sFaceY + (sFaceW / 2)
@@ -316,10 +316,6 @@ class VideoGenerator @Inject constructor(
             null
         }
     }
-
-    // Helpers to avoid logic duplication and ensure correct typing
-    private fun faceWidthValue(w: Float, sampleSize: Int): Float = w / sampleSize
-    private fun faceHeightValue(h: Float, sampleSize: Int): Float = h / sampleSize
 
     private fun drawDateOverlay(bitmap: Bitmap, timestamp: Long, fontSize: Int, dateFormat: String) {
         val canvas = Canvas(bitmap)
