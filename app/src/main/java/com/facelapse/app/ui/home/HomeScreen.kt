@@ -245,7 +245,7 @@ private fun EmptyProjectState(modifier: Modifier = Modifier) {
     ) {
         Icon(
             imageVector = Icons.Default.Face,
-            contentDescription = null,
+            contentDescription = stringResource(R.string.empty_projects_icon_description),
             modifier = Modifier.size(80.dp),
             tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
         )
