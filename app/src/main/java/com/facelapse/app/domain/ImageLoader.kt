@@ -64,16 +64,23 @@ class ImageLoader @Inject constructor(
 
             val bitmap = BitmapFactory.decodeFile(tempFile.absolutePath, options) ?: return null
 
-            val rotated = if (rotationInDegrees != 0) {
-                val matrix = android.graphics.Matrix()
-                matrix.postRotate(rotationInDegrees.toFloat())
-                val rotatedBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
-                if (rotatedBitmap != bitmap) {
+            val rotated = try {
+                if (rotationInDegrees != 0) {
+                    val matrix = android.graphics.Matrix()
+                    matrix.postRotate(rotationInDegrees.toFloat())
+                    val rotatedBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+                    if (rotatedBitmap != bitmap) {
+                        bitmap.recycle()
+                    }
+                    rotatedBitmap
+                } else {
+                    bitmap
+                }
+            } catch (t: Throwable) {
+                if (!bitmap.isRecycled) {
                     bitmap.recycle()
                 }
-                rotatedBitmap
-            } else {
-                bitmap
+                throw t
             }
             LoadedBitmap(rotated, inSampleSize)
 
