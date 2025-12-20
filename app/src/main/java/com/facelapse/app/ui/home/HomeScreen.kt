@@ -251,12 +251,12 @@ private fun EmptyProjectState(modifier: Modifier = Modifier) {
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            text = "No Projects Yet",
+            text = stringResource(R.string.empty_project_state_title),
             style = MaterialTheme.typography.titleLarge
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Tap the + button to start capturing your daily transformation.",
+            text = stringResource(R.string.empty_project_state_subtitle),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
