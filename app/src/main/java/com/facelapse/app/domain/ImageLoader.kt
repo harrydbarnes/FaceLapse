@@ -67,11 +67,11 @@ class ImageLoader @Inject constructor(
             val rotated = if (rotationInDegrees != 0) {
                 val matrix = android.graphics.Matrix()
                 matrix.postRotate(rotationInDegrees.toFloat())
-                val r = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
-                if (r != bitmap) {
+                val rotatedBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+                if (rotatedBitmap != bitmap) {
                     bitmap.recycle()
                 }
-                r
+                rotatedBitmap
             } else {
                 bitmap
             }
