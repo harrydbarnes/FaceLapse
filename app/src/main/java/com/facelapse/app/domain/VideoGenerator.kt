@@ -2,7 +2,6 @@ package com.facelapse.app.domain
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -12,7 +11,6 @@ import android.media.MediaFormat
 import android.media.MediaMuxer
 import android.net.Uri
 import android.util.Log
-import androidx.exifinterface.media.ExifInterface
 import com.facelapse.app.data.local.entity.PhotoEntity
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -21,6 +19,7 @@ import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.roundToInt
+import kotlin.math.max
 
 @Singleton
 class VideoGenerator @Inject constructor(
@@ -263,10 +262,12 @@ class VideoGenerator @Inject constructor(
         faceH: Float?
     ): Bitmap? {
         return try {
-             // Use shared ImageLoader to get upright bitmap
-             val rotatedBitmap = imageLoader.loadUprightBitmap(uri) ?: return null
+             // ⚡ Optimization: Load subsampled bitmap instead of full resolution
+             val loadedImage = imageLoader.loadOptimizedBitmap(uri, targetW, targetH) ?: return null
+             val rotatedBitmap = loadedImage.bitmap
+             val sampleSize = loadedImage.sampleSize
 
-             val scale = Math.max(targetW.toFloat() / rotatedBitmap.width, targetH.toFloat() / rotatedBitmap.height)
+             val scale = max(targetW.toFloat() / rotatedBitmap.width, targetH.toFloat() / rotatedBitmap.height)
              val scaledW = (rotatedBitmap.width * scale).roundToInt()
              val scaledH = (rotatedBitmap.height * scale).roundToInt()
 
@@ -276,10 +277,11 @@ class VideoGenerator @Inject constructor(
              var cropY = (scaledH - targetH) / 2
 
              if (faceX != null && faceY != null && faceW != null && faceH != null) {
-                  val sFaceX = faceX * scale
-                  val sFaceY = faceY * scale
-                  val sFaceW = faceW * scale
-                  val sFaceH = faceH * scale
+                  // Adjust face coordinates for sampleSize
+                  val sFaceX = (faceX / sampleSize) * scale
+                  val sFaceY = (faceY / sampleSize) * scale
+                  val sFaceW = (faceWidthValue(faceW, sampleSize)) * scale
+                  val sFaceH = (faceHeightValue(faceH, sampleSize)) * scale
 
                   val faceCenterX = sFaceX + (sFaceW / 2)
                   val faceCenterY = sFaceY + (sFaceH / 2)
@@ -287,9 +289,12 @@ class VideoGenerator @Inject constructor(
                   cropX = (faceCenterX - targetW / 2).toInt().coerceIn(0, scaledW - targetW)
                   cropY = (faceCenterY - targetH / 2).toInt().coerceIn(0, scaledH - targetH)
              } else if (faceX != null && faceY != null && faceW != null) {
-                  val sFaceX = faceX * scale
-                  val sFaceY = faceY * scale
-                  val sFaceW = faceW * scale
+                  // Handling case where height might be missing or using width for square aspect?
+                  // In existing logic: val faceCenterY = sFaceY + (sFaceW / 2)
+
+                  val sFaceX = (faceX / sampleSize) * scale
+                  val sFaceY = (faceY / sampleSize) * scale
+                  val sFaceW = (faceWidthValue(faceW, sampleSize)) * scale
 
                   val faceCenterX = sFaceX + (sFaceW / 2)
                   val faceCenterY = sFaceY + (sFaceW / 2)
@@ -311,6 +316,10 @@ class VideoGenerator @Inject constructor(
             null
         }
     }
+
+    // Helpers to avoid logic duplication and ensure correct typing
+    private fun faceWidthValue(w: Float, sampleSize: Int): Float = w / sampleSize
+    private fun faceHeightValue(h: Float, sampleSize: Int): Float = h / sampleSize
 
     private fun drawDateOverlay(bitmap: Bitmap, timestamp: Long, fontSize: Int, dateFormat: String) {
         val canvas = Canvas(bitmap)
