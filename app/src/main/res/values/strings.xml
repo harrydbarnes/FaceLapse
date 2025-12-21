@@ -8,10 +8,10 @@
     <string name="action_delete">Delete</string>
 
     <!-- Empty States -->
-    <string name="empty_projects_icon_description">No projects found</string>
+    <string name="empty_projects_icon_description">Face icon</string>
     <string name="empty_project_state_title">No projects yet</string>
     <string name="empty_project_state_subtitle">Tap + to create your first FaceLapse project</string>
-    <string name="empty_photos_icon_description">No photos added</string>
+    <string name="empty_photos_icon_description">Face icon</string>
     <string name="empty_photos_state_title">No photos yet</string>
     <string name="empty_photos_state_subtitle">Add photos of the same person to start building your timelapse</string>
 </resources>
