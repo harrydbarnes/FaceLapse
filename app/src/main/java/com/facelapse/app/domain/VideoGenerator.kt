@@ -125,6 +125,26 @@ class VideoGenerator @Inject constructor(
                 var presentationTimeUs = 0L
                 val frameDurationUs = 1_000_000L / fps
 
+                // Pre-allocate buffers and objects to avoid allocation in loop
+                val argbBuffer = IntArray(width * height)
+                val datePaint = if (isDateOverlayEnabled) {
+                    Paint().apply {
+                        color = Color.WHITE
+                        textSize = if (dateFontSize > 0) dateFontSize.toFloat() else 60f
+                        isAntiAlias = true
+                        setShadowLayer(5f, 0f, 0f, Color.BLACK)
+                        textAlign = Paint.Align.CENTER
+                        alpha = 255
+                    }
+                } else null
+                val dateFormatter = if (isDateOverlayEnabled) {
+                    try {
+                        java.text.SimpleDateFormat(dateFormat, java.util.Locale.getDefault())
+                    } catch (e: Exception) {
+                        null
+                    }
+                } else null
+
                 for (photo in photos) {
                     if (!isActive()) break
 
@@ -136,18 +156,19 @@ class VideoGenerator @Inject constructor(
                         photo.faceX,
                         photo.faceY,
                         photo.faceWidth,
-                        photo.faceHeight
+                        photo.faceHeight,
+                        requireMutable = isDateOverlayEnabled
                     )
 
                     if (bitmap != null) {
-                        if (isDateOverlayEnabled) {
-                            drawDateOverlay(bitmap, photo.timestamp, dateFontSize, dateFormat)
+                        if (isDateOverlayEnabled && datePaint != null) {
+                            drawDateOverlay(bitmap, photo.timestamp, datePaint, dateFormatter)
                         }
 
                         // Convert ARGB Bitmap to YUV420SP (NV12)
-                        val argb = IntArray(width * height)
-                        bitmap.getPixels(argb, 0, width, 0, 0, width, height)
-                        encodeYUV420SP(yuvBuffer, argb, width, height)
+                        // Use pre-allocated buffer
+                        bitmap.getPixels(argbBuffer, 0, width, 0, 0, width, height)
+                        encodeYUV420SP(yuvBuffer, argbBuffer, width, height)
 
                         // Feed to Encoder
                         val inputBufferIndex = localEncoder.dequeueInputBuffer(10_000)
@@ -213,6 +234,24 @@ class VideoGenerator @Inject constructor(
                     encoder.setRepeat(0) // 0 = loop indefinitely
                     encoder.setQuality(10) // default
 
+                    val datePaint = if (isDateOverlayEnabled) {
+                        Paint().apply {
+                            color = Color.WHITE
+                            textSize = if (dateFontSize > 0) dateFontSize.toFloat() else 60f
+                            isAntiAlias = true
+                            setShadowLayer(5f, 0f, 0f, Color.BLACK)
+                            textAlign = Paint.Align.CENTER
+                            alpha = 255
+                        }
+                    } else null
+                    val dateFormatter = if (isDateOverlayEnabled) {
+                        try {
+                            java.text.SimpleDateFormat(dateFormat, java.util.Locale.getDefault())
+                        } catch (e: Exception) {
+                            null
+                        }
+                    } else null
+
                     for (photo in photos) {
                         if (!isActive()) break
 
@@ -223,12 +262,13 @@ class VideoGenerator @Inject constructor(
                             photo.faceX,
                             photo.faceY,
                             photo.faceWidth,
-                            photo.faceHeight
+                            photo.faceHeight,
+                            requireMutable = isDateOverlayEnabled
                         )
 
                         if (bitmap != null) {
-                            if (isDateOverlayEnabled) {
-                                drawDateOverlay(bitmap, photo.timestamp, dateFontSize, dateFormat)
+                            if (isDateOverlayEnabled && datePaint != null) {
+                                drawDateOverlay(bitmap, photo.timestamp, datePaint, dateFormatter)
                             }
                             encoder.addFrame(bitmap)
                             bitmap.recycle()
@@ -260,7 +300,8 @@ class VideoGenerator @Inject constructor(
         faceX: Float?,
         faceY: Float?,
         faceW: Float?,
-        faceH: Float?
+        faceH: Float?,
+        requireMutable: Boolean = true
     ): Bitmap? {
         return try {
              // Use shared ImageLoader to get upright bitmap
@@ -302,29 +343,28 @@ class VideoGenerator @Inject constructor(
              if (finalBitmap != scaledBitmap && scaledBitmap != rotatedBitmap) scaledBitmap.recycle()
              if (finalBitmap != rotatedBitmap) rotatedBitmap.recycle()
 
-             val mutableBitmap = finalBitmap.copy(Bitmap.Config.ARGB_8888, true)
-             if (mutableBitmap != finalBitmap) finalBitmap.recycle()
-
-             mutableBitmap
+             if (requireMutable) {
+                 val mutableBitmap = finalBitmap.copy(Bitmap.Config.ARGB_8888, true)
+                 if (mutableBitmap != finalBitmap) finalBitmap.recycle()
+                 mutableBitmap
+             } else {
+                 finalBitmap
+             }
         } catch (e: Exception) {
             e.printStackTrace()
             null
         }
     }
 
-    private fun drawDateOverlay(bitmap: Bitmap, timestamp: Long, fontSize: Int, dateFormat: String) {
+    private fun drawDateOverlay(
+        bitmap: Bitmap,
+        timestamp: Long,
+        paint: Paint,
+        dateFormat: java.text.SimpleDateFormat?
+    ) {
         val canvas = Canvas(bitmap)
-        val paint = Paint().apply {
-            color = Color.WHITE
-            textSize = if (fontSize > 0) fontSize.toFloat() else 60f
-            isAntiAlias = true
-            setShadowLayer(5f, 0f, 0f, Color.BLACK)
-            textAlign = Paint.Align.CENTER
-            alpha = 255
-        }
-
         val dateString = try {
-            java.text.SimpleDateFormat(dateFormat, java.util.Locale.getDefault()).format(java.util.Date(timestamp))
+            dateFormat?.format(java.util.Date(timestamp)) ?: "Error"
         } catch (e: Exception) {
              "Error"
         }
