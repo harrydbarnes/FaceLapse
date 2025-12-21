@@ -304,8 +304,10 @@ class VideoGenerator @Inject constructor(
         requireMutable: Boolean = true
     ): Bitmap? {
         return try {
-             // Use shared ImageLoader to get upright bitmap
-             val rotatedBitmap = imageLoader.loadUprightBitmap(uri) ?: return null
+             // Use optimized loading to reduce memory usage during export
+             val result = imageLoader.loadOptimizedBitmap(uri, targetW, targetH) ?: return null
+             val rotatedBitmap = result.bitmap
+             val sampleSize = result.sampleSize
 
              val scale = Math.max(targetW.toFloat() / rotatedBitmap.width, targetH.toFloat() / rotatedBitmap.height)
              val scaledW = (rotatedBitmap.width * scale).roundToInt()
@@ -317,10 +319,12 @@ class VideoGenerator @Inject constructor(
              var cropY = (scaledH - targetH) / 2
 
              if (faceX != null && faceY != null && faceW != null && faceH != null) {
-                  val sFaceX = faceX * scale
-                  val sFaceY = faceY * scale
-                  val sFaceW = faceW * scale
-                  val sFaceH = faceH * scale
+                  // Adjust full-resolution face coordinates to the loaded (potentially subsampled) bitmap coordinate system
+                  // faceX (Full) -> faceX / sampleSize (Loaded) -> * scale (Target)
+                  val sFaceX = (faceX / sampleSize) * scale
+                  val sFaceY = (faceY / sampleSize) * scale
+                  val sFaceW = (faceW / sampleSize) * scale
+                  val sFaceH = (faceH / sampleSize) * scale
 
                   val faceCenterX = sFaceX + (sFaceW / 2)
                   val faceCenterY = sFaceY + (sFaceH / 2)
@@ -328,9 +332,9 @@ class VideoGenerator @Inject constructor(
                   cropX = (faceCenterX - targetW / 2).toInt().coerceIn(0, scaledW - targetW)
                   cropY = (faceCenterY - targetH / 2).toInt().coerceIn(0, scaledH - targetH)
              } else if (faceX != null && faceY != null && faceW != null) {
-                  val sFaceX = faceX * scale
-                  val sFaceY = faceY * scale
-                  val sFaceW = faceW * scale
+                  val sFaceX = (faceX / sampleSize) * scale
+                  val sFaceY = (faceY / sampleSize) * scale
+                  val sFaceW = (faceW / sampleSize) * scale
 
                   val faceCenterX = sFaceX + (sFaceW / 2)
                   val faceCenterY = sFaceY + (sFaceW / 2)
