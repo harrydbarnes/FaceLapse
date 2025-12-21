@@ -457,7 +457,7 @@ fun PreviewDialog(
                                 ImageRequest.Builder(LocalContext.current)
                                     .data(result.uri)
                                     .decoderFactory(
-                                        if (Build.VERSION.SDK_INT >= 28) {
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                                             ImageDecoderDecoder.Factory()
                                         } else {
                                             GifDecoder.Factory()
