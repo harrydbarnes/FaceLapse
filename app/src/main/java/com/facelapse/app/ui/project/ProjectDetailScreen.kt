@@ -47,8 +47,10 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
+import android.os.Build
 import coil.compose.AsyncImagePainter
 import coil.compose.rememberAsyncImagePainter
+import coil.decode.GifDecoder
 import coil.decode.ImageDecoderDecoder
 import coil.request.ImageRequest
 import androidx.compose.ui.res.stringResource
@@ -454,7 +456,13 @@ fun PreviewDialog(
                             painter = rememberAsyncImagePainter(
                                 ImageRequest.Builder(LocalContext.current)
                                     .data(result.uri)
-                                    .decoderFactory(ImageDecoderDecoder.Factory())
+                                    .decoderFactory(
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                                            ImageDecoderDecoder.Factory()
+                                        } else {
+                                            GifDecoder.Factory()
+                                        }
+                                    )
                                     .build()
                             ),
                             contentDescription = "Preview",
