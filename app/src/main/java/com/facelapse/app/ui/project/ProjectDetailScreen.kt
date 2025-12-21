@@ -51,6 +51,9 @@ import coil.compose.AsyncImagePainter
 import coil.compose.rememberAsyncImagePainter
 import coil.decode.ImageDecoderDecoder
 import coil.request.ImageRequest
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
+import com.facelapse.app.R
 import com.facelapse.app.data.local.entity.PhotoEntity
 import com.facelapse.app.data.local.entity.ProjectEntity
 import com.google.mlkit.vision.face.Face
@@ -173,9 +176,7 @@ fun ProjectDetailScreen(
     ) { padding ->
         Box(modifier = Modifier.padding(padding)) {
             if (photos.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("No photos added yet.")
-                }
+                EmptyPhotosState(modifier = Modifier.fillMaxSize())
             } else {
                 LazyVerticalGrid(
                     columns = GridCells.Adaptive(minSize = 120.dp),
@@ -486,6 +487,34 @@ fun PreviewDialog(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun EmptyPhotosState(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Face,
+            contentDescription = stringResource(R.string.empty_photos_icon_description),
+            modifier = Modifier.size(80.dp),
+            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = stringResource(R.string.empty_photos_state_title),
+            style = MaterialTheme.typography.titleLarge
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = stringResource(R.string.empty_photos_state_subtitle),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
     }
 }
 
