@@ -1,6 +1,8 @@
 #include <jni.h>
 #include <algorithm>
 #include <android/bitmap.h>
+#include <memory>
+#include <type_traits>
 
 // Standard BT.601 coefficients
 // Y = 0.257*R + 0.504*G + 0.098*B + 16
@@ -27,6 +29,31 @@ inline jbyte rgbToY(int r, int g, int b) {
     return clamp(((BT601_Y_R * r + BT601_Y_G * g + BT601_Y_B * b + 128) >> 8) + 16);
 }
 
+namespace {
+
+// Deleter for JNI local references
+struct JniLocalRefDeleter {
+    JNIEnv* env;
+    explicit JniLocalRefDeleter(JNIEnv* e) noexcept : env(e) {}
+    void operator()(jobject localRef) const noexcept {
+        if (localRef) {
+            env->DeleteLocalRef(localRef);
+        }
+    }
+};
+
+// RAII wrapper for local references using std::unique_ptr
+using ScopedLocalRef = std::unique_ptr<std::remove_pointer_t<jobject>, JniLocalRefDeleter>;
+
+// Helper function to throw IllegalArgumentException
+void throwIllegalArgument(JNIEnv* env, jclass exceptionClass, const char* message) {
+    if (exceptionClass != nullptr) {
+        env->ThrowNew(exceptionClass, message);
+    }
+}
+
+} // namespace
+
 extern "C" JNIEXPORT void JNICALL
 Java_com_facelapse_app_domain_VideoGenerator_encodeYUV420SP(
         JNIEnv* env,
@@ -43,32 +70,30 @@ Java_com_facelapse_app_domain_VideoGenerator_encodeYUV420SP(
 
     // Pre-fetch IllegalArgumentException class
     jclass illegalArgumentExceptionClass = env->FindClass("java/lang/IllegalArgumentException");
-    // If we can't find the exception class, we can't really throw, but this shouldn't happen.
-    // Proceeding might be dangerous if we need to throw, but standard practice is to handle it.
-    // For now, we'll check it before usage.
+
+    // Check if FindClass succeeded before proceeding
+    if (illegalArgumentExceptionClass == nullptr) {
+        return; // Exception already pending from FindClass.
+    }
+
+    ScopedLocalRef exceptionClassGuard(illegalArgumentExceptionClass, JniLocalRefDeleter{env});
 
     // Get bitmap info
     if ((ret = AndroidBitmap_getInfo(env, bitmap, &info)) < 0) {
-        if (illegalArgumentExceptionClass != nullptr) {
-             env->ThrowNew(illegalArgumentExceptionClass, "AndroidBitmap_getInfo failed.");
-        }
+        throwIllegalArgument(env, illegalArgumentExceptionClass, "AndroidBitmap_getInfo failed.");
         return;
     }
 
     // Check format (must be RGBA_8888)
     // ANDROID_BITMAP_FORMAT_RGBA_8888 = 1
     if (info.format != ANDROID_BITMAP_FORMAT_RGBA_8888) {
-         if (illegalArgumentExceptionClass != nullptr) {
-             env->ThrowNew(illegalArgumentExceptionClass, "Bitmap must be ARGB_8888 format.");
-         }
+         throwIllegalArgument(env, illegalArgumentExceptionClass, "Bitmap format must be RGBA_8888 (from Java ARGB_8888 config).");
          return;
     }
 
     // Safety check: dimensions
     if (info.width != (uint32_t)width || info.height != (uint32_t)height) {
-         if (illegalArgumentExceptionClass != nullptr) {
-             env->ThrowNew(illegalArgumentExceptionClass, "Bitmap dimensions do not match expected width/height.");
-         }
+         throwIllegalArgument(env, illegalArgumentExceptionClass, "Bitmap dimensions do not match expected width/height.");
          return;
     }
 
@@ -77,18 +102,13 @@ Java_com_facelapse_app_domain_VideoGenerator_encodeYUV420SP(
     int requiredYuvSize = frameSize * 3 / 2;
 
     if (yuvLen < requiredYuvSize) {
-        if (illegalArgumentExceptionClass != nullptr) {
-            env->ThrowNew(illegalArgumentExceptionClass, "YUV output array is too small.");
-        }
+        throwIllegalArgument(env, illegalArgumentExceptionClass, "YUV output array is too small.");
         return;
     }
 
     // Lock bitmap pixels
     if ((ret = AndroidBitmap_lockPixels(env, bitmap, &pixels)) < 0) {
-        // Lock failed
-        if (illegalArgumentExceptionClass != nullptr) {
-             env->ThrowNew(illegalArgumentExceptionClass, "AndroidBitmap_lockPixels failed.");
-        }
+        throwIllegalArgument(env, illegalArgumentExceptionClass, "AndroidBitmap_lockPixels failed.");
         return;
     }
 
