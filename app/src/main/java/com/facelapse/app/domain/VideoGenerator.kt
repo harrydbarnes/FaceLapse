@@ -126,7 +126,6 @@ class VideoGenerator @Inject constructor(
                 val frameDurationUs = 1_000_000L / fps
 
                 // Pre-allocate buffers and objects to avoid allocation in loop
-                val argbBuffer = IntArray(width * height)
                 val datePaint = if (isDateOverlayEnabled) {
                     Paint().apply {
                         color = Color.WHITE
@@ -166,9 +165,8 @@ class VideoGenerator @Inject constructor(
                         }
 
                         // Convert ARGB Bitmap to YUV420SP (NV12)
-                        // Use pre-allocated buffer
-                        bitmap.getPixels(argbBuffer, 0, width, 0, 0, width, height)
-                        encodeYUV420SP(yuvBuffer, argbBuffer, width, height)
+                        // Reads pixels directly from Bitmap in native code to avoid copy
+                        encodeYUV420SP(yuvBuffer, bitmap, width, height)
 
                         // Feed to Encoder
                         val inputBufferIndex = localEncoder.dequeueInputBuffer(10_000)
@@ -352,7 +350,14 @@ class VideoGenerator @Inject constructor(
                  if (mutableBitmap != finalBitmap) finalBitmap.recycle()
                  mutableBitmap
              } else {
-                 finalBitmap
+                 // Native code requires ARGB_8888 for direct pixel access
+                 if (finalBitmap.config != Bitmap.Config.ARGB_8888) {
+                     val argb = finalBitmap.copy(Bitmap.Config.ARGB_8888, false)
+                     if (argb != finalBitmap) finalBitmap.recycle()
+                     argb
+                 } else {
+                     finalBitmap
+                 }
              }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -392,7 +397,7 @@ class VideoGenerator @Inject constructor(
         // Made internal/visible for testing
         // Implemented in native code for performance.
         @JvmStatic
-        external fun encodeYUV420SP(yuv420sp: ByteArray, argb: IntArray, width: Int, height: Int)
+        external fun encodeYUV420SP(yuv420sp: ByteArray, bitmap: Bitmap, width: Int, height: Int)
 
         init {
             try {
