@@ -22,6 +22,11 @@ inline jbyte clamp(int value) {
     return static_cast<jbyte>(std::clamp(value, 0, 255));
 }
 
+// Helper function for Y calculation
+inline jbyte rgbToY(int r, int g, int b) {
+    return clamp(((BT601_Y_R * r + BT601_Y_G * g + BT601_Y_B * b + 128) >> 8) + 16);
+}
+
 extern "C" JNIEXPORT void JNICALL
 Java_com_facelapse_app_domain_VideoGenerator_encodeYUV420SP(
         JNIEnv* env,
@@ -36,16 +41,23 @@ Java_com_facelapse_app_domain_VideoGenerator_encodeYUV420SP(
     AndroidBitmapInfo info;
     int ret;
 
+    // Pre-fetch IllegalArgumentException class
+    jclass illegalArgumentExceptionClass = env->FindClass("java/lang/IllegalArgumentException");
+    // If we can't find the exception class, we can't really throw, but this shouldn't happen.
+    // Proceeding might be dangerous if we need to throw, but standard practice is to handle it.
+    // For now, we'll check it before usage.
+
     // Get bitmap info
     if ((ret = AndroidBitmap_getInfo(env, bitmap, &info)) < 0) {
-        // Error reading bitmap info
+        if (illegalArgumentExceptionClass != nullptr) {
+             env->ThrowNew(illegalArgumentExceptionClass, "AndroidBitmap_getInfo failed.");
+        }
         return;
     }
 
     // Check format (must be RGBA_8888)
     // ANDROID_BITMAP_FORMAT_RGBA_8888 = 1
     if (info.format != ANDROID_BITMAP_FORMAT_RGBA_8888) {
-         jclass illegalArgumentExceptionClass = env->FindClass("java/lang/IllegalArgumentException");
          if (illegalArgumentExceptionClass != nullptr) {
              env->ThrowNew(illegalArgumentExceptionClass, "Bitmap must be ARGB_8888 format.");
          }
@@ -54,7 +66,6 @@ Java_com_facelapse_app_domain_VideoGenerator_encodeYUV420SP(
 
     // Safety check: dimensions
     if (info.width != (uint32_t)width || info.height != (uint32_t)height) {
-         jclass illegalArgumentExceptionClass = env->FindClass("java/lang/IllegalArgumentException");
          if (illegalArgumentExceptionClass != nullptr) {
              env->ThrowNew(illegalArgumentExceptionClass, "Bitmap dimensions do not match expected width/height.");
          }
@@ -66,7 +77,6 @@ Java_com_facelapse_app_domain_VideoGenerator_encodeYUV420SP(
     int requiredYuvSize = frameSize * 3 / 2;
 
     if (yuvLen < requiredYuvSize) {
-        jclass illegalArgumentExceptionClass = env->FindClass("java/lang/IllegalArgumentException");
         if (illegalArgumentExceptionClass != nullptr) {
             env->ThrowNew(illegalArgumentExceptionClass, "YUV output array is too small.");
         }
@@ -76,6 +86,9 @@ Java_com_facelapse_app_domain_VideoGenerator_encodeYUV420SP(
     // Lock bitmap pixels
     if ((ret = AndroidBitmap_lockPixels(env, bitmap, &pixels)) < 0) {
         // Lock failed
+        if (illegalArgumentExceptionClass != nullptr) {
+             env->ThrowNew(illegalArgumentExceptionClass, "AndroidBitmap_lockPixels failed.");
+        }
         return;
     }
 
@@ -83,6 +96,7 @@ Java_com_facelapse_app_domain_VideoGenerator_encodeYUV420SP(
     yuv = (jbyte*) env->GetPrimitiveArrayCritical(yuv420sp, nullptr);
     if (yuv == nullptr) {
         AndroidBitmap_unlockPixels(env, bitmap);
+        // JVM will throw OOME automatically
         return;
     }
 
@@ -104,28 +118,28 @@ Java_com_facelapse_app_domain_VideoGenerator_encodeYUV420SP(
             int r1 = row1[offset1];
             int g1 = row1[offset1 + 1];
             int b1 = row1[offset1 + 2];
-            yuv[y_idx + i] = clamp(((BT601_Y_R * r1 + BT601_Y_G * g1 + BT601_Y_B * b1 + 128) >> 8) + 16);
+            yuv[y_idx + i] = rgbToY(r1, g1, b1);
 
             // P2 (i+1, j)
             int offset2 = (i + 1) * 4;
             int r2 = row1[offset2];
             int g2 = row1[offset2 + 1];
             int b2 = row1[offset2 + 2];
-            yuv[y_idx + i + 1] = clamp(((BT601_Y_R * r2 + BT601_Y_G * g2 + BT601_Y_B * b2 + 128) >> 8) + 16);
+            yuv[y_idx + i + 1] = rgbToY(r2, g2, b2);
 
             // P3 (i, j+1)
             int offset3 = i * 4;
             int r3 = row2[offset3];
             int g3 = row2[offset3 + 1];
             int b3 = row2[offset3 + 2];
-            yuv[y_idx + width + i] = clamp(((BT601_Y_R * r3 + BT601_Y_G * g3 + BT601_Y_B * b3 + 128) >> 8) + 16);
+            yuv[y_idx + width + i] = rgbToY(r3, g3, b3);
 
             // P4 (i+1, j+1)
             int offset4 = (i + 1) * 4;
             int r4 = row2[offset4];
             int g4 = row2[offset4 + 1];
             int b4 = row2[offset4 + 2];
-            yuv[y_idx + width + i + 1] = clamp(((BT601_Y_R * r4 + BT601_Y_G * g4 + BT601_Y_B * b4 + 128) >> 8) + 16);
+            yuv[y_idx + width + i + 1] = rgbToY(r4, g4, b4);
 
             // UV from P1
             int u = ((BT601_U_R * r1 + BT601_U_G * g1 + BT601_U_B * b1 + 128) >> 8) + 128;
