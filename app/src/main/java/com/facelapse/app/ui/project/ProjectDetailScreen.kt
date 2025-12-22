@@ -28,6 +28,10 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
+import androidx.compose.material3.rememberTooltipState
+import androidx.compose.material3.PlainTooltip
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -127,30 +131,50 @@ fun ProjectDetailScreen(
                     },
                     actions = {
                         // Standard Top Bar Actions
-                        IconButton(
-                            onClick = { viewModel.processFaces() },
-                            enabled = !isProcessing && photos.isNotEmpty()
-                        ) {
-                            Icon(Icons.Default.Face, contentDescription = "Align Faces")
+                        ActionTooltip(tooltip = stringResource(R.string.action_align_faces)) {
+                            IconButton(
+                                onClick = { viewModel.processFaces() },
+                                enabled = !isProcessing && photos.isNotEmpty()
+                            ) {
+                                Icon(
+                                    Icons.Default.Face,
+                                    contentDescription = stringResource(R.string.action_align_faces)
+                                )
+                            }
                         }
                         // Face Audit
-                         IconButton(
-                            onClick = { project?.id?.let { onNavigateToFaceAudit(it) } },
-                            enabled = !isProcessing && photos.isNotEmpty()
-                        ) {
-                            Icon(Icons.Default.AccountBox, contentDescription = "View Detected Faces")
+                        ActionTooltip(tooltip = stringResource(R.string.action_view_detected_faces)) {
+                            IconButton(
+                                onClick = { project?.id?.let { onNavigateToFaceAudit(it) } },
+                                enabled = !isProcessing && photos.isNotEmpty()
+                            ) {
+                                Icon(
+                                    Icons.Default.AccountBox,
+                                    contentDescription = stringResource(R.string.action_view_detected_faces)
+                                )
+                            }
                         }
-                        IconButton(
-                            onClick = { showSettingsDialog = true },
-                            enabled = !isGenerating && !isProcessing && photos.isNotEmpty()
-                        ) {
-                            Icon(Icons.Default.Settings, contentDescription = "Project Settings")
+                        ActionTooltip(tooltip = stringResource(R.string.action_project_settings)) {
+                            IconButton(
+                                onClick = { showSettingsDialog = true },
+                                enabled = !isGenerating && !isProcessing && photos.isNotEmpty()
+                            ) {
+                                Icon(
+                                    Icons.Default.Settings,
+                                    contentDescription = stringResource(R.string.action_project_settings)
+                                )
+                            }
                         }
-                        IconButton(
-                            onClick = { viewModel.exportVideo(context) },
-                            enabled = !isGenerating && !isProcessing && photos.isNotEmpty()
-                        ) {
-                            Icon(Icons.Default.Share, contentDescription = "Share")
+                        ActionTooltip(tooltip = stringResource(R.string.action_share_project)) {
+                            IconButton(
+                                onClick = { viewModel.exportVideo(context) },
+                                enabled = !isGenerating && !isProcessing && photos.isNotEmpty()
+                            ) {
+                                Icon(
+                                    Icons.Default.Share,
+                                    contentDescription = stringResource(R.string.action_share_project)
+                                )
+                            }
                         }
                     }
                 )
@@ -160,8 +184,8 @@ fun ProjectDetailScreen(
             if (showDetectFab) {
                 ExtendedFloatingActionButton(
                     onClick = { viewModel.processFaces() },
-                    icon = { Icon(Icons.Default.Face, "Detect") },
-                    text = { Text("Detect Faces") }
+                    icon = { Icon(Icons.Default.Face, stringResource(R.string.action_detect_faces)) },
+                    text = { Text(stringResource(R.string.action_detect_faces)) }
                 )
             } else {
                 FloatingActionButton(
@@ -171,7 +195,7 @@ fun ProjectDetailScreen(
                         )
                     }
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = "Add Photos")
+                    Icon(Icons.Default.Add, contentDescription = stringResource(R.string.action_add_photos))
                 }
             }
         }
@@ -260,6 +284,27 @@ fun ProjectDetailScreen(
                 viewModel.shareFile(context, result.uri, result.mimeType)
             }
         )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ActionTooltip(
+    tooltip: String,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    TooltipBox(
+        positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+        tooltip = {
+            PlainTooltip {
+                Text(tooltip)
+            }
+        },
+        state = rememberTooltipState(),
+        modifier = modifier
+    ) {
+        content()
     }
 }
 
