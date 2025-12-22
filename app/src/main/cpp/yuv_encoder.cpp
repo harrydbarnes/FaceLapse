@@ -27,6 +27,31 @@ inline jbyte rgbToY(int r, int g, int b) {
     return clamp(((BT601_Y_R * r + BT601_Y_G * g + BT601_Y_B * b + 128) >> 8) + 16);
 }
 
+// RAII wrapper for local references
+class ScopedLocalRef {
+public:
+    ScopedLocalRef(JNIEnv* env, jobject localRef) : env_(env), localRef_(localRef) {}
+    ~ScopedLocalRef() {
+        if (localRef_ != nullptr) {
+            env_->DeleteLocalRef(localRef_);
+        }
+    }
+    // Delete copy constructor and assignment operator
+    ScopedLocalRef(const ScopedLocalRef&) = delete;
+    ScopedLocalRef& operator=(const ScopedLocalRef&) = delete;
+
+private:
+    JNIEnv* env_;
+    jobject localRef_;
+};
+
+// Helper function to throw IllegalArgumentException
+void throwIllegalArgument(JNIEnv* env, jclass exceptionClass, const char* message) {
+    if (exceptionClass != nullptr) {
+        env->ThrowNew(exceptionClass, message);
+    }
+}
+
 extern "C" JNIEXPORT void JNICALL
 Java_com_facelapse_app_domain_VideoGenerator_encodeYUV420SP(
         JNIEnv* env,
@@ -43,32 +68,24 @@ Java_com_facelapse_app_domain_VideoGenerator_encodeYUV420SP(
 
     // Pre-fetch IllegalArgumentException class
     jclass illegalArgumentExceptionClass = env->FindClass("java/lang/IllegalArgumentException");
-    // If we can't find the exception class, we can't really throw, but this shouldn't happen.
-    // Proceeding might be dangerous if we need to throw, but standard practice is to handle it.
-    // For now, we'll check it before usage.
+    ScopedLocalRef exceptionClassGuard(env, illegalArgumentExceptionClass);
 
     // Get bitmap info
     if ((ret = AndroidBitmap_getInfo(env, bitmap, &info)) < 0) {
-        if (illegalArgumentExceptionClass != nullptr) {
-             env->ThrowNew(illegalArgumentExceptionClass, "AndroidBitmap_getInfo failed.");
-        }
+        throwIllegalArgument(env, illegalArgumentExceptionClass, "AndroidBitmap_getInfo failed.");
         return;
     }
 
     // Check format (must be RGBA_8888)
     // ANDROID_BITMAP_FORMAT_RGBA_8888 = 1
     if (info.format != ANDROID_BITMAP_FORMAT_RGBA_8888) {
-         if (illegalArgumentExceptionClass != nullptr) {
-             env->ThrowNew(illegalArgumentExceptionClass, "Bitmap must be ARGB_8888 format.");
-         }
+         throwIllegalArgument(env, illegalArgumentExceptionClass, "Bitmap must be ARGB_8888 format.");
          return;
     }
 
     // Safety check: dimensions
     if (info.width != (uint32_t)width || info.height != (uint32_t)height) {
-         if (illegalArgumentExceptionClass != nullptr) {
-             env->ThrowNew(illegalArgumentExceptionClass, "Bitmap dimensions do not match expected width/height.");
-         }
+         throwIllegalArgument(env, illegalArgumentExceptionClass, "Bitmap dimensions do not match expected width/height.");
          return;
     }
 
@@ -77,18 +94,13 @@ Java_com_facelapse_app_domain_VideoGenerator_encodeYUV420SP(
     int requiredYuvSize = frameSize * 3 / 2;
 
     if (yuvLen < requiredYuvSize) {
-        if (illegalArgumentExceptionClass != nullptr) {
-            env->ThrowNew(illegalArgumentExceptionClass, "YUV output array is too small.");
-        }
+        throwIllegalArgument(env, illegalArgumentExceptionClass, "YUV output array is too small.");
         return;
     }
 
     // Lock bitmap pixels
     if ((ret = AndroidBitmap_lockPixels(env, bitmap, &pixels)) < 0) {
-        // Lock failed
-        if (illegalArgumentExceptionClass != nullptr) {
-             env->ThrowNew(illegalArgumentExceptionClass, "AndroidBitmap_lockPixels failed.");
-        }
+        throwIllegalArgument(env, illegalArgumentExceptionClass, "AndroidBitmap_lockPixels failed.");
         return;
     }
 
