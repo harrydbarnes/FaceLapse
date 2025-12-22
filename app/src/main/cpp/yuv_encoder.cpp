@@ -34,6 +34,7 @@ namespace {
 // Deleter for JNI local references
 struct JniLocalRefDeleter {
     JNIEnv* env;
+    explicit JniLocalRefDeleter(JNIEnv* e) : env(e) {}
     void operator()(jobject localRef) const {
         if (localRef) {
             env->DeleteLocalRef(localRef);
@@ -75,7 +76,7 @@ Java_com_facelapse_app_domain_VideoGenerator_encodeYUV420SP(
         return; // Exception already pending from FindClass.
     }
 
-    ScopedLocalRef exceptionClassGuard(illegalArgumentExceptionClass, {env});
+    ScopedLocalRef exceptionClassGuard(illegalArgumentExceptionClass, JniLocalRefDeleter{env});
 
     // Get bitmap info
     if ((ret = AndroidBitmap_getInfo(env, bitmap, &info)) < 0) {
