@@ -1,6 +1,8 @@
 #include <jni.h>
 #include <algorithm>
 #include <android/bitmap.h>
+#include <memory>
+#include <type_traits>
 
 // Standard BT.601 coefficients
 // Y = 0.257*R + 0.504*G + 0.098*B + 16
@@ -29,40 +31,18 @@ inline jbyte rgbToY(int r, int g, int b) {
 
 namespace {
 
-// RAII wrapper for local references
-class ScopedLocalRef {
-public:
-    ScopedLocalRef(JNIEnv* env, jobject localRef) : env_(env), localRef_(localRef) {}
-    ~ScopedLocalRef() {
-        if (localRef_ != nullptr) {
-            env_->DeleteLocalRef(localRef_);
+// Deleter for JNI local references
+struct JniLocalRefDeleter {
+    JNIEnv* env;
+    void operator()(jobject localRef) const {
+        if (localRef) {
+            env->DeleteLocalRef(localRef);
         }
     }
-    // Delete copy constructor and assignment operator
-    ScopedLocalRef(const ScopedLocalRef&) = delete;
-    ScopedLocalRef& operator=(const ScopedLocalRef&) = delete;
-
-    // Movable
-    ScopedLocalRef(ScopedLocalRef&& other) noexcept : env_(other.env_), localRef_(other.localRef_) {
-        other.localRef_ = nullptr;
-    }
-
-    ScopedLocalRef& operator=(ScopedLocalRef&& other) noexcept {
-        if (this != &other) {
-            if (localRef_ != nullptr) {
-                env_->DeleteLocalRef(localRef_);
-            }
-            env_ = other.env_;
-            localRef_ = other.localRef_;
-            other.localRef_ = nullptr;
-        }
-        return *this;
-    }
-
-private:
-    JNIEnv* env_;
-    jobject localRef_;
 };
+
+// RAII wrapper for local references using std::unique_ptr
+using ScopedLocalRef = std::unique_ptr<std::remove_pointer_t<jobject>, JniLocalRefDeleter>;
 
 // Helper function to throw IllegalArgumentException
 void throwIllegalArgument(JNIEnv* env, jclass exceptionClass, const char* message) {
@@ -95,7 +75,7 @@ Java_com_facelapse_app_domain_VideoGenerator_encodeYUV420SP(
         return; // Exception already pending from FindClass.
     }
 
-    ScopedLocalRef exceptionClassGuard(env, illegalArgumentExceptionClass);
+    ScopedLocalRef exceptionClassGuard(illegalArgumentExceptionClass, {env});
 
     // Get bitmap info
     if ((ret = AndroidBitmap_getInfo(env, bitmap, &info)) < 0) {
