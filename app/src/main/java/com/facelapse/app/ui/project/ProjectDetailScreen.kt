@@ -291,6 +291,7 @@ fun ProjectDetailScreen(
 @Composable
 private fun ActionTooltip(
     tooltip: String,
+    modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
     TooltipBox(
@@ -300,7 +301,8 @@ private fun ActionTooltip(
                 Text(tooltip)
             }
         },
-        state = rememberTooltipState()
+        state = rememberTooltipState(),
+        modifier = modifier
     ) {
         content()
     }
