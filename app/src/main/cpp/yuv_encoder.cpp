@@ -86,7 +86,7 @@ Java_com_facelapse_app_domain_VideoGenerator_encodeYUV420SP(
     // Check format (must be RGBA_8888)
     // ANDROID_BITMAP_FORMAT_RGBA_8888 = 1
     if (info.format != ANDROID_BITMAP_FORMAT_RGBA_8888) {
-         throwIllegalArgument(env, illegalArgumentExceptionClass, "Bitmap must be ARGB_8888 format.");
+         throwIllegalArgument(env, illegalArgumentExceptionClass, "Bitmap format must be RGBA_8888 (from Java ARGB_8888 config).");
          return;
     }
 
