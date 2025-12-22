@@ -40,6 +40,23 @@ public:
     ScopedLocalRef(const ScopedLocalRef&) = delete;
     ScopedLocalRef& operator=(const ScopedLocalRef&) = delete;
 
+    // Movable
+    ScopedLocalRef(ScopedLocalRef&& other) noexcept : env_(other.env_), localRef_(other.localRef_) {
+        other.localRef_ = nullptr;
+    }
+
+    ScopedLocalRef& operator=(ScopedLocalRef&& other) noexcept {
+        if (this != &other) {
+            if (localRef_ != nullptr) {
+                env_->DeleteLocalRef(localRef_);
+            }
+            env_ = other.env_;
+            localRef_ = other.localRef_;
+            other.localRef_ = nullptr;
+        }
+        return *this;
+    }
+
 private:
     JNIEnv* env_;
     jobject localRef_;
@@ -68,6 +85,12 @@ Java_com_facelapse_app_domain_VideoGenerator_encodeYUV420SP(
 
     // Pre-fetch IllegalArgumentException class
     jclass illegalArgumentExceptionClass = env->FindClass("java/lang/IllegalArgumentException");
+
+    // Check if FindClass succeeded before proceeding
+    if (illegalArgumentExceptionClass == nullptr) {
+        return; // Exception already pending from FindClass.
+    }
+
     ScopedLocalRef exceptionClassGuard(env, illegalArgumentExceptionClass);
 
     // Get bitmap info
