@@ -352,11 +352,11 @@ class VideoGenerator @Inject constructor(
              } else {
                  // Native code requires ARGB_8888 for direct pixel access
                  if (finalBitmap.config != Bitmap.Config.ARGB_8888) {
-                     finalBitmap.copy(Bitmap.Config.ARGB_8888, false).also {
-                         if (it != finalBitmap) {
-                             finalBitmap.recycle()
-                         }
-                     }
+finalBitmap.copy(Bitmap.Config.ARGB_8888, false)?.also {
+    if (it != finalBitmap) {
+        finalBitmap.recycle()
+    }
+}
                  } else {
                      finalBitmap
                  }
