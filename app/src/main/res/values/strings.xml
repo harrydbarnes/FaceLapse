@@ -7,6 +7,14 @@
     <string name="settings_format_video">Video</string>
     <string name="action_delete">Delete</string>
 
+    <!-- Actions -->
+    <string name="action_align_faces">Align Faces</string>
+    <string name="action_view_detected_faces">View Detected Faces</string>
+    <string name="action_project_settings">Project Settings</string>
+    <string name="action_share_project">Share Project</string>
+    <string name="action_detect_faces">Detect Faces</string>
+    <string name="action_add_photos">Add Photos</string>
+
     <!-- Empty States -->
     <string name="empty_projects_icon_description">Face icon</string>
     <string name="empty_project_state_title">No projects yet</string>
