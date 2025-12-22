@@ -27,6 +27,8 @@ inline jbyte rgbToY(int r, int g, int b) {
     return clamp(((BT601_Y_R * r + BT601_Y_G * g + BT601_Y_B * b + 128) >> 8) + 16);
 }
 
+namespace {
+
 // RAII wrapper for local references
 class ScopedLocalRef {
 public:
@@ -68,6 +70,8 @@ void throwIllegalArgument(JNIEnv* env, jclass exceptionClass, const char* messag
         env->ThrowNew(exceptionClass, message);
     }
 }
+
+} // namespace
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_facelapse_app_domain_VideoGenerator_encodeYUV420SP(
