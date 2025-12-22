@@ -36,9 +36,7 @@ struct JniLocalRefDeleter {
     JNIEnv* env;
     explicit JniLocalRefDeleter(JNIEnv* e) noexcept : env(e) {}
     void operator()(jobject localRef) const noexcept {
-        if (localRef) {
-            env->DeleteLocalRef(localRef);
-        }
+        env->DeleteLocalRef(localRef);
     }
 };
 
@@ -47,9 +45,7 @@ using ScopedLocalRef = std::unique_ptr<std::remove_pointer_t<jobject>, JniLocalR
 
 // Helper function to throw IllegalArgumentException
 void throwIllegalArgument(JNIEnv* env, jclass exceptionClass, const char* message) {
-    if (exceptionClass != nullptr) {
-        env->ThrowNew(exceptionClass, message);
-    }
+    env->ThrowNew(exceptionClass, message);
 }
 
 } // namespace
