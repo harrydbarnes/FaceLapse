@@ -34,8 +34,8 @@ namespace {
 // Deleter for JNI local references
 struct JniLocalRefDeleter {
     JNIEnv* env;
-    explicit JniLocalRefDeleter(JNIEnv* e) : env(e) {}
-    void operator()(jobject localRef) const {
+    explicit JniLocalRefDeleter(JNIEnv* e) noexcept : env(e) {}
+    void operator()(jobject localRef) const noexcept {
         if (localRef) {
             env->DeleteLocalRef(localRef);
         }
