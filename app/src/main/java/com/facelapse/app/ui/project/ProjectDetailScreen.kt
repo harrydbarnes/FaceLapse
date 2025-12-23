@@ -765,6 +765,36 @@ fun FaceSelectionDialog(
     }
 }
 
+@Composable
+private fun PhotoActionButton(
+    onClick: () -> Unit,
+    icon: ImageVector,
+    contentDescription: String,
+    tint: Color = Color.White,
+    containerColor: Color = Color.Black.copy(alpha = 0.5f),
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .size(36.dp)
+            .clip(CircleShape)
+            .background(containerColor)
+            .clickable(
+                onClick = onClick,
+                role = Role.Button
+            )
+            .padding(8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = tint,
+            modifier = Modifier.fillMaxSize()
+        )
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PhotoItem(
@@ -828,38 +858,60 @@ fun PhotoItem(
         }
 
         if (!inSelectionMode) {
-            // ... existing Move/Delete buttons ...
+            // Move buttons
             Row(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(4.dp),
-                horizontalArrangement = Arrangement.spacedBy(0.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 if (!isFirst) {
-                    IconButton(onClick = onMoveUp, modifier = Modifier.size(24.dp)) {
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Back", tint = Color.White)
-                    }
-                }
-                if (!isLast) {
-                    IconButton(onClick = onMoveDown, modifier = Modifier.size(24.dp)) {
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Forward", tint = Color.White)
-                    }
-                }
-            }
-            Row(modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(4.dp)) {
-                if (photo.isProcessed) {
-                    Icon(
-                        Icons.Default.Face,
-                        "Face Detected",
-                        tint = Color.Green,
-                        modifier = Modifier.size(16.dp)
+                    PhotoActionButton(
+                        onClick = onMoveUp,
+                        icon = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                        contentDescription = "Move photo backward"
                     )
                 }
-                IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
-                    Icon(Icons.Default.Delete, "Delete", tint = Color.Red)
+                if (!isLast) {
+                    PhotoActionButton(
+                        onClick = onMoveDown,
+                        icon = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = "Move photo forward"
+                    )
                 }
+            }
+
+            // Status and Delete
+            Row(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                if (photo.isProcessed) {
+                    Box(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                            .padding(4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Face,
+                            "Face Detected",
+                            tint = Color.Green,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                }
+                PhotoActionButton(
+                    onClick = onDelete,
+                    icon = Icons.Default.Delete,
+                    contentDescription = "Delete photo",
+                    tint = Color.White,
+                    containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.8f)
+                )
             }
         }
     }
