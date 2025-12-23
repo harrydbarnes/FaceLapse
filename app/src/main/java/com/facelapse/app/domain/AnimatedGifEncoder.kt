@@ -21,6 +21,7 @@ class AnimatedGifEncoder {
     protected var out: OutputStream? = null
     protected var image: Bitmap? = null // current frame
     protected var pixels: ByteArray? = null // BGR byte array from frame
+    protected var rgbIntArray: IntArray? = null // Reuse buffer for bitmap pixels
     protected var indexedPixels: ByteArray? = null // converted frame indexed to palette
     protected var colorDepth: Int = 0 // number of bit planes
     protected var colorTab: ByteArray? = null // RGB palette
@@ -106,6 +107,7 @@ class AnimatedGifEncoder {
         out = null
         image = null
         pixels = null
+        rgbIntArray = null
         indexedPixels = null
         colorTab = null
         closeStream = false
@@ -155,7 +157,9 @@ class AnimatedGifEncoder {
     protected fun analyzePixels() {
         val len = pixels!!.size
         val nPix = len / 3
-        indexedPixels = ByteArray(nPix)
+        if (indexedPixels == null || indexedPixels!!.size != nPix) {
+            indexedPixels = ByteArray(nPix)
+        }
         val nq = NeuQuant(pixels!!, len, sample)
         // initialize quantizer
         colorTab = nq.process() // create reduced palette
@@ -173,7 +177,6 @@ class AnimatedGifEncoder {
             usedEntry[index] = true
             indexedPixels!![i] = index.toByte()
         }
-        pixels = null
         colorDepth = 8
         palSize = 7
         // get closest match to transparent color if specified
@@ -217,9 +220,15 @@ class AnimatedGifEncoder {
             image = temp
         }
         val data = getImageData(image!!)
-        pixels = ByteArray(data.size * 3)
+        val currentW = image!!.width
+        val currentH = image!!.height
+        val numPixels = currentW * currentH
+
+        if (pixels == null || pixels!!.size != numPixels * 3) {
+            pixels = ByteArray(numPixels * 3)
+        }
         var tind = 0
-        for (i in data.indices) {
+        for (i in 0 until numPixels) {
             val td = data[i]
             pixels!![tind++] = (td and 0xFF).toByte()
             pixels!![tind++] = ((td shr 8) and 0xFF).toByte()
@@ -230,10 +239,14 @@ class AnimatedGifEncoder {
     protected fun getImageData(img: Bitmap): IntArray {
         val w = img.width
         val h = img.height
+        val requiredSize = w * h
 
-        val data = IntArray(w * h)
-        img.getPixels(data, 0, w, 0, 0, w, h)
-        return data
+        if (rgbIntArray == null || rgbIntArray!!.size != requiredSize) {
+            rgbIntArray = IntArray(requiredSize)
+        }
+
+        img.getPixels(rgbIntArray!!, 0, w, 0, 0, w, h)
+        return rgbIntArray!!
     }
 
     protected fun writeGraphicCtrlExt() {
