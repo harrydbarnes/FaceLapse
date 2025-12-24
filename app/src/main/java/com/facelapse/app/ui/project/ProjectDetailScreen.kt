@@ -893,7 +893,7 @@ private fun PhotoActionButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     contentDescription: String,
     tint: Color = Color.White,
-    containerColor: Color = Color.Black.copy(alpha = 0.5f)
+    containerColor: Color = MaterialTheme.colorScheme.scrim
 ) {
     // We use a Box with clickable to control the visual size (36dp)
     // while implicitly allowing a larger touch target if possible,
