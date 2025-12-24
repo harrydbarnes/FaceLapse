@@ -870,7 +870,7 @@ fun PhotoItem(
                             Icon(
                                 Icons.Default.Face,
                                 stringResource(R.string.status_face_detected),
-                                tint = Color.Green,
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(16.dp)
                             )
                         }
