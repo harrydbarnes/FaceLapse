@@ -133,6 +133,7 @@ class VideoGenerator @Inject constructor(
                 val canvasBitmap = outBitmap ?: throw IllegalStateException("Failed to create bitmap")
                 val canvas = Canvas(canvasBitmap)
                 val paint = Paint(Paint.FILTER_BITMAP_FLAG) // Enable bilinear filtering
+                val matrix = Matrix()
 
                 val datePaint = if (isDateOverlayEnabled) {
                     Paint().apply {
@@ -161,6 +162,7 @@ class VideoGenerator @Inject constructor(
                         canvasBitmap,
                         canvas,
                         paint,
+                        matrix,
                         photo.faceX,
                         photo.faceY,
                         photo.faceWidth,
@@ -241,6 +243,7 @@ class VideoGenerator @Inject constructor(
                 val canvasBitmap = outBitmap ?: throw IllegalStateException("Failed to create bitmap")
                 val canvas = Canvas(canvasBitmap)
                 val paint = Paint(Paint.FILTER_BITMAP_FLAG)
+                val matrix = Matrix()
 
                 java.io.FileOutputStream(outputFile).use { fos ->
                     val encoder = AnimatedGifEncoder()
@@ -275,6 +278,7 @@ class VideoGenerator @Inject constructor(
                             canvasBitmap,
                             canvas,
                             paint,
+                            matrix,
                             photo.faceX,
                             photo.faceY,
                             photo.faceWidth,
@@ -320,6 +324,7 @@ class VideoGenerator @Inject constructor(
         outBitmap: Bitmap,
         canvas: Canvas,
         paint: Paint,
+        matrix: Matrix,
         faceX: Float?,
         faceY: Float?,
         faceW: Float?,
@@ -373,8 +378,8 @@ class VideoGenerator @Inject constructor(
                   cropY = (faceCenterY - targetH / 2).coerceIn(0f, scaledH - targetH)
              }
 
-             // Render directly to outBitmap using Matrix
-             val matrix = Matrix()
+             // Render directly to outBitmap using reused Matrix
+             matrix.reset()
              matrix.setScale(scale, scale)
              matrix.postTranslate(-cropX, -cropY)
 
