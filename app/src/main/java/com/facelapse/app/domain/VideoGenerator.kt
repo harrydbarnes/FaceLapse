@@ -385,7 +385,7 @@ finalBitmap.copy(Bitmap.Config.ARGB_8888, false)?.also {
     }
 
     companion object {
-        private const val TAG = "VideoGenerator"
+        private val TAG = VideoGenerator::class.java.simpleName
         private const val BT601_Y_R = 66
         private const val BT601_Y_G = 129
         private const val BT601_Y_B = 25
