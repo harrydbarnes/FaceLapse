@@ -899,22 +899,22 @@ private fun PhotoActionButton(
     // while implicitly allowing a larger touch target if possible,
     // though in a dense grid we explicitly want 36dp visual + layout size
     // to prevent overlapping.
-    Box(
-        modifier = Modifier
-            .size(36.dp)
-            .clip(CircleShape)
-            .background(containerColor)
-            .clickable(
-                onClick = onClick,
-                role = Role.Button
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = tint,
-            modifier = Modifier.size(20.dp)
-        )
+    // By using IconButton, we get the standard 48dp touch target for free,
+    // improving accessibility, while still controlling the visual appearance.
+    IconButton(onClick = onClick) {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(containerColor),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                tint = tint,
+                modifier = Modifier.size(20.dp)
+            )
+        }
     }
 }
