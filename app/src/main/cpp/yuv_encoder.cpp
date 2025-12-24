@@ -3,6 +3,7 @@
 #include <android/bitmap.h>
 #include <memory>
 #include <type_traits>
+#include <limits>
 
 // Standard BT.601 coefficients
 // Y = 0.257*R + 0.504*G + 0.098*B + 16
@@ -74,6 +75,18 @@ Java_com_facelapse_app_domain_VideoGenerator_encodeYUV420SP(
 
     ScopedLocalRef exceptionClassGuard(illegalArgumentExceptionClass, JniLocalRefDeleter{env});
 
+    // Security Check: Positive dimensions
+    if (width <= 0 || height <= 0) {
+        throwIllegalArgument(env, illegalArgumentExceptionClass, "Width and height must be positive.");
+        return;
+    }
+
+    // Security Check: Even dimensions (required for 2x2 subsampling)
+    if (width % 2 != 0 || height % 2 != 0) {
+        throwIllegalArgument(env, illegalArgumentExceptionClass, "Width and height must be even.");
+        return;
+    }
+
     // Get bitmap info
     if ((ret = AndroidBitmap_getInfo(env, bitmap, &info)) < 0) {
         throwIllegalArgument(env, illegalArgumentExceptionClass, "AndroidBitmap_getInfo failed.");
@@ -93,11 +106,25 @@ Java_com_facelapse_app_domain_VideoGenerator_encodeYUV420SP(
          return;
     }
 
-    jsize yuvLen = env->GetArrayLength(yuv420sp);
-    int frameSize = width * height;
-    int requiredYuvSize = frameSize * 3 / 2;
+    // Security Check: Integer Overflow
+    // Calculate required size using 64-bit integer to prevent overflow
+    int64_t frameSize = (int64_t)width * height;
 
-    if (yuvLen < requiredYuvSize) {
+    // Check if frameSize exceeds what we can reasonably handle or fits in 32-bit int
+    if (frameSize > std::numeric_limits<jint>::max()) {
+        throwIllegalArgument(env, illegalArgumentExceptionClass, "Image dimensions too large (frame size overflow).");
+        return;
+    }
+
+    int64_t requiredYuvSize = frameSize * 3 / 2;
+    if (requiredYuvSize > std::numeric_limits<jint>::max()) {
+         throwIllegalArgument(env, illegalArgumentExceptionClass, "Image dimensions too large (YUV buffer overflow).");
+         return;
+    }
+
+    jsize yuvLen = env->GetArrayLength(yuv420sp);
+
+    if (yuvLen < (jint)requiredYuvSize) {
         throwIllegalArgument(env, illegalArgumentExceptionClass, "YUV output array is too small.");
         return;
     }
@@ -117,7 +144,7 @@ Java_com_facelapse_app_domain_VideoGenerator_encodeYUV420SP(
     }
 
     int y_idx = 0;
-    int uv_idx = frameSize;
+    int uv_idx = (int)frameSize;
     uint32_t stride = info.stride; // Bytes per row
 
     // Process 2x2 blocks
