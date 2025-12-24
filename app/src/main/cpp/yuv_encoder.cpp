@@ -118,8 +118,8 @@ Java_com_facelapse_app_domain_VideoGenerator_encodeYUV420SP(
 
     int64_t requiredYuvSize = frameSize * 3 / 2;
     if (requiredYuvSize > std::numeric_limits<jint>::max()) {
-         throwIllegalArgument(env, illegalArgumentExceptionClass, "Image dimensions too large (YUV buffer overflow).");
-         return;
+        throwIllegalArgument(env, illegalArgumentExceptionClass, "Image dimensions too large (YUV buffer overflow).");
+        return;
     }
 
     jsize yuvLen = env->GetArrayLength(yuv420sp);
@@ -144,7 +144,7 @@ Java_com_facelapse_app_domain_VideoGenerator_encodeYUV420SP(
     }
 
     int y_idx = 0;
-    int uv_idx = (int)frameSize;
+    int uv_idx = static_cast<int>(frameSize);
     uint32_t stride = info.stride; // Bytes per row
 
     // Process 2x2 blocks
