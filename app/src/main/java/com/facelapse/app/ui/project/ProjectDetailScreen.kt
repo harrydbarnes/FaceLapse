@@ -860,7 +860,7 @@ fun PhotoItem(
                 if (photo.isProcessed) {
                     // Just a visual indicator, no click action needed, but needs contrast
                     Surface(
-                        color = Color.Black.copy(alpha = 0.5f),
+                        color = MaterialTheme.colorScheme.scrim,
                         shape = CircleShape,
                         modifier = Modifier
                             .padding(end = 4.dp)
