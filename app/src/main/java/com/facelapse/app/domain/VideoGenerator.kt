@@ -129,7 +129,9 @@ class VideoGenerator @Inject constructor(
 
                 // Pre-allocate buffers and objects to avoid allocation in loop
                 outBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-                val canvas = Canvas(outBitmap)
+                // Use a local non-null reference for safety in the loop
+                val canvasBitmap = outBitmap ?: throw IllegalStateException("Failed to create bitmap")
+                val canvas = Canvas(canvasBitmap)
                 val paint = Paint(Paint.FILTER_BITMAP_FLAG) // Enable bilinear filtering
 
                 val datePaint = if (isDateOverlayEnabled) {
@@ -156,7 +158,7 @@ class VideoGenerator @Inject constructor(
                     // Load and process bitmap directly into reused outBitmap
                     val successLoad = loadBitmapToCanvas(
                         Uri.parse(photo.originalUri),
-                        outBitmap!!,
+                        canvasBitmap,
                         canvas,
                         paint,
                         photo.faceX,
@@ -167,12 +169,12 @@ class VideoGenerator @Inject constructor(
 
                     if (successLoad) {
                         if (isDateOverlayEnabled && datePaint != null) {
-                            drawDateOverlay(outBitmap!!, photo.timestamp, datePaint, dateFormatter)
+                            drawDateOverlay(canvasBitmap, photo.timestamp, datePaint, dateFormatter)
                         }
 
                         // Convert ARGB Bitmap to YUV420SP (NV12)
                         // Reads pixels directly from Bitmap in native code to avoid copy
-                        encodeYUV420SP(yuvBuffer, outBitmap!!, width, height)
+                        encodeYUV420SP(yuvBuffer, canvasBitmap, width, height)
 
                         // Feed to Encoder
                         val inputBufferIndex = localEncoder.dequeueInputBuffer(10_000)
@@ -236,7 +238,8 @@ class VideoGenerator @Inject constructor(
 
                 // Pre-allocate reused bitmap
                 outBitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
-                val canvas = Canvas(outBitmap)
+                val canvasBitmap = outBitmap ?: throw IllegalStateException("Failed to create bitmap")
+                val canvas = Canvas(canvasBitmap)
                 val paint = Paint(Paint.FILTER_BITMAP_FLAG)
 
                 java.io.FileOutputStream(outputFile).use { fos ->
@@ -269,7 +272,7 @@ class VideoGenerator @Inject constructor(
 
                         val successLoad = loadBitmapToCanvas(
                             Uri.parse(photo.originalUri),
-                            outBitmap!!,
+                            canvasBitmap,
                             canvas,
                             paint,
                             photo.faceX,
@@ -280,9 +283,9 @@ class VideoGenerator @Inject constructor(
 
                         if (successLoad) {
                             if (isDateOverlayEnabled && datePaint != null) {
-                                drawDateOverlay(outBitmap!!, photo.timestamp, datePaint, dateFormatter)
+                                drawDateOverlay(canvasBitmap, photo.timestamp, datePaint, dateFormatter)
                             }
-                            encoder.addFrame(outBitmap!!)
+                            encoder.addFrame(canvasBitmap)
                             // Do NOT recycle outBitmap here
                         }
                     }
@@ -323,6 +326,9 @@ class VideoGenerator @Inject constructor(
         faceH: Float?
     ): Boolean {
         return try {
+             // Clear the canvas to avoid artifacts from previous frames if the new image has transparency
+             outBitmap.eraseColor(Color.TRANSPARENT)
+
              val targetW = outBitmap.width
              val targetH = outBitmap.height
 
@@ -359,6 +365,7 @@ class VideoGenerator @Inject constructor(
                   val sFaceY = (faceY / sampleSize) * scale
                   val sFaceW = (faceW / sampleSize) * scale
 
+                  // Fallback: If faceHeight is missing, assume a square face box (height = width).
                   val faceCenterX = sFaceX + (sFaceW / 2)
                   val faceCenterY = sFaceY + (sFaceW / 2)
 
@@ -371,9 +378,6 @@ class VideoGenerator @Inject constructor(
              matrix.setScale(scale, scale)
              matrix.postTranslate(-cropX, -cropY)
 
-             // Since we are CenterCropping, the drawn bitmap covers the entire outBitmap.
-             // We don't strictly need to clear outBitmap unless we have transparency issues,
-             // but here we assume opaque photos.
              canvas.drawBitmap(rotatedBitmap, matrix, paint)
 
              rotatedBitmap.recycle()
