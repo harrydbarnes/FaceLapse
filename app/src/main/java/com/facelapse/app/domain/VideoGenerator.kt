@@ -2,9 +2,9 @@ package com.facelapse.app.domain
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.media.MediaCodec
 import android.media.MediaCodecInfo
@@ -44,14 +44,7 @@ class VideoGenerator @Inject constructor(
             var trackIndex = -1
             var muxerStarted = false
             var success = false
-
-            fun safeCleanup(action: () -> Unit, errorMessage: String) {
-                try {
-                    action()
-                } catch (e: Exception) {
-                    Log.e(TAG, errorMessage, e)
-                }
-            }
+            var frameBuffer: FrameBuffer? = null
 
             try {
                 if (outputFile.exists()) outputFile.delete()
@@ -126,6 +119,8 @@ class VideoGenerator @Inject constructor(
                 val frameDurationUs = 1_000_000L / fps
 
                 // Pre-allocate buffers and objects to avoid allocation in loop
+                frameBuffer = FrameBuffer(width, height)
+
                 val datePaint = if (isDateOverlayEnabled) {
                     Paint().apply {
                         color = Color.WHITE
@@ -147,26 +142,24 @@ class VideoGenerator @Inject constructor(
                 for (photo in photos) {
                     if (!isActive()) break
 
-                    // Load and process bitmap
-                    val bitmap = loadBitmap(
+                    // Load and process bitmap directly into reused outBitmap
+                    val successLoad = loadBitmapToCanvas(
                         Uri.parse(photo.originalUri),
-                        width,
-                        height,
+                        frameBuffer,
                         photo.faceX,
                         photo.faceY,
                         photo.faceWidth,
-                        photo.faceHeight,
-                        requireMutable = isDateOverlayEnabled
+                        photo.faceHeight
                     )
 
-                    if (bitmap != null) {
+                    if (successLoad) {
                         if (isDateOverlayEnabled && datePaint != null) {
-                            drawDateOverlay(bitmap, photo.timestamp, datePaint, dateFormatter)
+                            drawDateOverlay(frameBuffer.bitmap, photo.timestamp, datePaint, dateFormatter)
                         }
 
                         // Convert ARGB Bitmap to YUV420SP (NV12)
                         // Reads pixels directly from Bitmap in native code to avoid copy
-                        encodeYUV420SP(yuvBuffer, bitmap, width, height)
+                        encodeYUV420SP(yuvBuffer, frameBuffer.bitmap, width, height)
 
                         // Feed to Encoder
                         val inputBufferIndex = localEncoder.dequeueInputBuffer(10_000)
@@ -178,7 +171,7 @@ class VideoGenerator @Inject constructor(
                                 presentationTimeUs += frameDurationUs
                             }
                         }
-                        bitmap.recycle()
+                        // Do NOT recycle outBitmap here, it is reused
                     }
 
                     // Regular Drain
@@ -207,6 +200,7 @@ class VideoGenerator @Inject constructor(
                     }
                 }, "Error stopping muxer")
                 safeCleanup({ mediaMuxer?.release() }, "Error releasing muxer")
+                frameBuffer?.recycle()
             }
             success
         }
@@ -223,8 +217,13 @@ class VideoGenerator @Inject constructor(
         fps: Int = 10
     ): Boolean {
         return withContext(Dispatchers.IO) {
+            var frameBuffer: FrameBuffer? = null
             try {
                 if (outputFile.exists()) outputFile.delete()
+
+                // Pre-allocate reused bitmap
+                frameBuffer = FrameBuffer(targetWidth, targetHeight)
+
                 java.io.FileOutputStream(outputFile).use { fos ->
                     val encoder = AnimatedGifEncoder()
                     encoder.start(fos)
@@ -253,30 +252,31 @@ class VideoGenerator @Inject constructor(
                     for (photo in photos) {
                         if (!isActive()) break
 
-                        val bitmap = loadBitmap(
+                        val successLoad = loadBitmapToCanvas(
                             Uri.parse(photo.originalUri),
-                            targetWidth,
-                            targetHeight,
+                            frameBuffer,
                             photo.faceX,
                             photo.faceY,
                             photo.faceWidth,
-                            photo.faceHeight,
-                            requireMutable = isDateOverlayEnabled
+                            photo.faceHeight
                         )
 
-                        if (bitmap != null) {
+                        if (successLoad) {
                             if (isDateOverlayEnabled && datePaint != null) {
-                                drawDateOverlay(bitmap, photo.timestamp, datePaint, dateFormatter)
+                                drawDateOverlay(frameBuffer.bitmap, photo.timestamp, datePaint, dateFormatter)
                             }
-                            encoder.addFrame(bitmap)
-                            bitmap.recycle()
+                            encoder.addFrame(frameBuffer.bitmap)
+                            // Do NOT recycle outBitmap here
                         }
                     }
                     encoder.finish()
                 }
+                true
             } catch (e: Exception) {
                 Log.e(TAG, "Error generating GIF", e)
                 false
+            } finally {
+                frameBuffer?.recycle()
             }
         }
     }
@@ -291,27 +291,36 @@ class VideoGenerator @Inject constructor(
 
     private fun isActive(): Boolean = true
 
-    private fun loadBitmap(
+    /**
+     * Loads and renders the bitmap directly onto the provided [frameBuffer].
+     * Avoids intermediate allocations for scaled/cropped bitmaps.
+     */
+    private fun loadBitmapToCanvas(
         uri: Uri,
-        targetW: Int,
-        targetH: Int,
+        frameBuffer: FrameBuffer,
         faceX: Float?,
         faceY: Float?,
         faceW: Float?,
-        faceH: Float?,
-        requireMutable: Boolean = true
-    ): Bitmap? {
+        faceH: Float?
+    ): Boolean {
         return try {
+             // Clear the canvas to avoid artifacts from previous frames if the new image has transparency
+             frameBuffer.bitmap.eraseColor(Color.TRANSPARENT)
+
+             val targetW = frameBuffer.bitmap.width
+             val targetH = frameBuffer.bitmap.height
+
              // Use optimized loading to reduce memory usage during export
-             val result = imageLoader.loadOptimizedBitmap(uri, targetW, targetH) ?: return null
+             val result = imageLoader.loadOptimizedBitmap(uri, targetW, targetH) ?: return false
              val rotatedBitmap = result.bitmap
              val sampleSize = result.sampleSize
 
-             val scale = Math.max(targetW.toFloat() / rotatedBitmap.width, targetH.toFloat() / rotatedBitmap.height)
-             val scaledW = (rotatedBitmap.width * scale).roundToInt()
-             val scaledH = (rotatedBitmap.height * scale).roundToInt()
+             // Calculate scale to cover the target area (CenterCrop)
+             val scale = kotlin.math.max(targetW.toFloat() / rotatedBitmap.width, targetH.toFloat() / rotatedBitmap.height)
 
-             val scaledBitmap = Bitmap.createScaledBitmap(rotatedBitmap, scaledW, scaledH, true)
+             // Calculate virtual scaled dimensions (if we were to scale the whole image)
+             val scaledW = (rotatedBitmap.width * scale)
+             val scaledH = (rotatedBitmap.height * scale)
 
              var cropX = (scaledW - targetW) / 2
              var cropY = (scaledH - targetH) / 2
@@ -327,43 +336,33 @@ class VideoGenerator @Inject constructor(
                   val faceCenterX = sFaceX + (sFaceW / 2)
                   val faceCenterY = sFaceY + (sFaceH / 2)
 
-                  cropX = (faceCenterX - targetW / 2).toInt().coerceIn(0, scaledW - targetW)
-                  cropY = (faceCenterY - targetH / 2).toInt().coerceIn(0, scaledH - targetH)
+                  cropX = (faceCenterX - targetW / 2).coerceIn(0f, scaledW - targetW)
+                  cropY = (faceCenterY - targetH / 2).coerceIn(0f, scaledH - targetH)
              } else if (faceX != null && faceY != null && faceW != null) {
                   val sFaceX = (faceX / sampleSize) * scale
                   val sFaceY = (faceY / sampleSize) * scale
                   val sFaceW = (faceW / sampleSize) * scale
 
+                  // Fallback: If faceHeight is missing, assume a square face box (height = width).
                   val faceCenterX = sFaceX + (sFaceW / 2)
                   val faceCenterY = sFaceY + (sFaceW / 2)
 
-                  cropX = (faceCenterX - targetW / 2).toInt().coerceIn(0, scaledW - targetW)
-                  cropY = (faceCenterY - targetH / 2).toInt().coerceIn(0, scaledH - targetH)
+                  cropX = (faceCenterX - targetW / 2).coerceIn(0f, scaledW - targetW)
+                  cropY = (faceCenterY - targetH / 2).coerceIn(0f, scaledH - targetH)
              }
 
-             val finalBitmap = Bitmap.createBitmap(scaledBitmap, cropX, cropY, targetW, targetH)
-             if (finalBitmap != scaledBitmap && scaledBitmap != rotatedBitmap) scaledBitmap.recycle()
-             if (finalBitmap != rotatedBitmap) rotatedBitmap.recycle()
+             // Render directly to outBitmap using reused Matrix
+             frameBuffer.matrix.reset()
+             frameBuffer.matrix.setScale(scale, scale)
+             frameBuffer.matrix.postTranslate(-cropX, -cropY)
 
-             if (requireMutable) {
-                 val mutableBitmap = finalBitmap.copy(Bitmap.Config.ARGB_8888, true)
-                 if (mutableBitmap != finalBitmap) finalBitmap.recycle()
-                 mutableBitmap
-             } else {
-                 // Native code requires ARGB_8888 for direct pixel access
-                 if (finalBitmap.config != Bitmap.Config.ARGB_8888) {
-finalBitmap.copy(Bitmap.Config.ARGB_8888, false)?.also {
-    if (it != finalBitmap) {
-        finalBitmap.recycle()
-    }
-}
-                 } else {
-                     finalBitmap
-                 }
-             }
+             frameBuffer.canvas.drawBitmap(rotatedBitmap, frameBuffer.matrix, frameBuffer.paint)
+
+             rotatedBitmap.recycle()
+             true
         } catch (e: Exception) {
             Log.e(TAG, "Error loading bitmap", e)
-            null
+            false
         }
     }
 
@@ -382,6 +381,28 @@ finalBitmap.copy(Bitmap.Config.ARGB_8888, false)?.also {
         val x = bitmap.width / 2f
         val y = bitmap.height - 100f
         canvas.drawText(dateString, x, y, paint)
+    }
+
+    private fun safeCleanup(action: () -> Unit, errorMessage: String) {
+        try {
+            action()
+        } catch (e: Exception) {
+            Log.e(TAG, errorMessage, e)
+        }
+    }
+
+    private class FrameBuffer(val width: Int, val height: Int) {
+        val bitmap: Bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            ?: throw IllegalStateException("Failed to create bitmap")
+        val canvas: Canvas = Canvas(bitmap)
+        val paint: Paint = Paint(Paint.FILTER_BITMAP_FLAG)
+        val matrix: Matrix = Matrix()
+
+        fun recycle() {
+            if (!bitmap.isRecycled) {
+                bitmap.recycle()
+            }
+        }
     }
 
     companion object {
