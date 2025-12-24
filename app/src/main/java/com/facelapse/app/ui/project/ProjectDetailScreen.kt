@@ -818,7 +818,7 @@ fun PhotoItem(
         if (isSelected) {
             Icon(
                 imageVector = Icons.Default.CheckCircle,
-                contentDescription = "Selected",
+                contentDescription = stringResource(R.string.status_selected),
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier
                     .align(Alignment.TopStart)
@@ -828,7 +828,7 @@ fun PhotoItem(
         }
 
         if (!inSelectionMode) {
-            // ... existing Move/Delete buttons ...
+            // Top Right: Move Controls
             Row(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
@@ -836,31 +836,85 @@ fun PhotoItem(
                 horizontalArrangement = Arrangement.spacedBy(0.dp)
             ) {
                 if (!isFirst) {
-                    IconButton(onClick = onMoveUp, modifier = Modifier.size(24.dp)) {
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Back", tint = Color.White)
-                    }
-                }
-                if (!isLast) {
-                    IconButton(onClick = onMoveDown, modifier = Modifier.size(24.dp)) {
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Forward", tint = Color.White)
-                    }
-                }
-            }
-            Row(modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(4.dp)) {
-                if (photo.isProcessed) {
-                    Icon(
-                        Icons.Default.Face,
-                        "Face Detected",
-                        tint = Color.Green,
-                        modifier = Modifier.size(16.dp)
+                    PhotoActionButton(
+                        onClick = onMoveUp,
+                        icon = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                        contentDescription = stringResource(R.string.action_move_backward)
                     )
                 }
-                IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
-                    Icon(Icons.Default.Delete, "Delete", tint = Color.Red)
+                if (!isLast) {
+                    PhotoActionButton(
+                        onClick = onMoveDown,
+                        icon = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = stringResource(R.string.action_move_forward)
+                    )
                 }
             }
+            // Bottom Right: Delete and Status
+            Row(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(4.dp),
+                verticalAlignment = Alignment.Bottom
+            ) {
+                if (photo.isProcessed) {
+                    // Just a visual indicator, no click action needed, but needs contrast
+                    Surface(
+                        color = Color.Black.copy(alpha = 0.5f),
+                        shape = CircleShape,
+                        modifier = Modifier
+                            .padding(end = 4.dp)
+                            .size(24.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.Default.Face,
+                                stringResource(R.string.status_face_detected),
+                                tint = Color.Green,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                }
+                PhotoActionButton(
+                    onClick = onDelete,
+                    icon = Icons.Default.Delete,
+                    contentDescription = stringResource(R.string.action_delete_photo),
+                    tint = MaterialTheme.colorScheme.error // Use theme error color for better consistency
+                )
+            }
         }
+    }
+}
+
+@Composable
+private fun PhotoActionButton(
+    onClick: () -> Unit,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    tint: Color = Color.White,
+    containerColor: Color = Color.Black.copy(alpha = 0.5f)
+) {
+    // We use a Box with clickable to control the visual size (36dp)
+    // while implicitly allowing a larger touch target if possible,
+    // though in a dense grid we explicitly want 36dp visual + layout size
+    // to prevent overlapping.
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(CircleShape)
+            .background(containerColor)
+            .clickable(
+                onClick = onClick,
+                role = Role.Button
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = tint,
+            modifier = Modifier.size(20.dp)
+        )
     }
 }

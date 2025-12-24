@@ -14,6 +14,11 @@
     <string name="action_share_project">Share Project</string>
     <string name="action_detect_faces">Detect Faces</string>
     <string name="action_add_photos">Add Photos</string>
+    <string name="action_move_backward">Move Backward</string>
+    <string name="action_move_forward">Move Forward</string>
+    <string name="action_delete_photo">Delete Photo</string>
+    <string name="status_face_detected">Face Detected</string>
+    <string name="status_selected">Selected</string>
 
     <!-- Empty States -->
     <string name="empty_projects_icon_description">Face icon</string>
