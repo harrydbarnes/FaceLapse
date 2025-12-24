@@ -87,6 +87,22 @@ Java_com_facelapse_app_domain_VideoGenerator_encodeYUV420SP(
         return;
     }
 
+    // Security Check: Integer Overflow
+    // Calculate required size using 64-bit integer to prevent overflow
+    int64_t frameSize = (int64_t)width * height;
+
+    // Check if frameSize exceeds what we can reasonably handle or fits in 32-bit int
+    if (frameSize > std::numeric_limits<jint>::max()) {
+        throwIllegalArgument(env, illegalArgumentExceptionClass, "Image dimensions too large (frame size overflow).");
+        return;
+    }
+
+    int64_t requiredYuvSize = frameSize * 3 / 2;
+    if (requiredYuvSize > std::numeric_limits<jint>::max()) {
+        throwIllegalArgument(env, illegalArgumentExceptionClass, "Image dimensions too large (YUV buffer overflow).");
+        return;
+    }
+
     // Get bitmap info
     if ((ret = AndroidBitmap_getInfo(env, bitmap, &info)) < 0) {
         throwIllegalArgument(env, illegalArgumentExceptionClass, "AndroidBitmap_getInfo failed.");
@@ -104,22 +120,6 @@ Java_com_facelapse_app_domain_VideoGenerator_encodeYUV420SP(
     if (info.width != (uint32_t)width || info.height != (uint32_t)height) {
          throwIllegalArgument(env, illegalArgumentExceptionClass, "Bitmap dimensions do not match expected width/height.");
          return;
-    }
-
-    // Security Check: Integer Overflow
-    // Calculate required size using 64-bit integer to prevent overflow
-    int64_t frameSize = (int64_t)width * height;
-
-    // Check if frameSize exceeds what we can reasonably handle or fits in 32-bit int
-    if (frameSize > std::numeric_limits<jint>::max()) {
-        throwIllegalArgument(env, illegalArgumentExceptionClass, "Image dimensions too large (frame size overflow).");
-        return;
-    }
-
-    int64_t requiredYuvSize = frameSize * 3 / 2;
-    if (requiredYuvSize > std::numeric_limits<jint>::max()) {
-        throwIllegalArgument(env, illegalArgumentExceptionClass, "Image dimensions too large (YUV buffer overflow).");
-        return;
     }
 
     jsize yuvLen = env->GetArrayLength(yuv420sp);
