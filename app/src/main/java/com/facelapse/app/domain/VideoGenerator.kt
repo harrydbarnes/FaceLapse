@@ -316,7 +316,7 @@ class VideoGenerator @Inject constructor(
              val sampleSize = result.sampleSize
 
              // Calculate scale to cover the target area (CenterCrop)
-             val scale = Math.max(targetW.toFloat() / rotatedBitmap.width, targetH.toFloat() / rotatedBitmap.height)
+             val scale = kotlin.math.max(targetW.toFloat() / rotatedBitmap.width, targetH.toFloat() / rotatedBitmap.height)
 
              // Calculate virtual scaled dimensions (if we were to scale the whole image)
              val scaledW = (rotatedBitmap.width * scale)
