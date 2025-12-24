@@ -345,27 +345,17 @@ class VideoGenerator @Inject constructor(
             var cropX = (scaledW - targetW) / 2
             var cropY = (scaledH - targetH) / 2
 
-            if (faceX != null && faceY != null && faceW != null && faceH != null) {
+            if (faceX != null && faceY != null && faceW != null) {
                 // Adjust full-resolution face coordinates to the loaded (potentially subsampled) bitmap coordinate system
                 // faceX (Full) -> faceX / sampleSize (Loaded) -> * scale (Target)
                 val sFaceX = (faceX / sampleSize) * scale
                 val sFaceY = (faceY / sampleSize) * scale
                 val sFaceW = (faceW / sampleSize) * scale
-                val sFaceH = (faceH / sampleSize) * scale
+                // If face height is missing, assume a square face box by using the width.
+                val sFaceH = if (faceH != null) (faceH / sampleSize) * scale else sFaceW
 
                 val faceCenterX = sFaceX + (sFaceW / 2)
                 val faceCenterY = sFaceY + (sFaceH / 2)
-
-                cropX = (faceCenterX - targetW / 2).toInt().coerceIn(0, scaledW - targetW)
-                cropY = (faceCenterY - targetH / 2).toInt().coerceIn(0, scaledH - targetH)
-            } else if (faceX != null && faceY != null && faceW != null) {
-                val sFaceX = (faceX / sampleSize) * scale
-                val sFaceY = (faceY / sampleSize) * scale
-                val sFaceW = (faceW / sampleSize) * scale
-
-                val faceCenterX = sFaceX + (sFaceW / 2)
-                // If face height is missing, assume square face box (use width)
-                val faceCenterY = sFaceY + (sFaceW / 2)
 
                 cropX = (faceCenterX - targetW / 2).toInt().coerceIn(0, scaledW - targetW)
                 cropY = (faceCenterY - targetH / 2).toInt().coerceIn(0, scaledH - targetH)
