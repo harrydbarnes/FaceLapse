@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.media.MediaCodec
 import android.media.MediaCodecInfo
@@ -144,45 +145,55 @@ class VideoGenerator @Inject constructor(
                     }
                 } else null
 
-                for (photo in photos) {
-                    if (!isActive()) break
+                // Reusable bitmap for frame rendering to avoid allocation churn
+                val frameBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
 
-                    // Load and process bitmap
-                    val bitmap = loadBitmap(
-                        Uri.parse(photo.originalUri),
-                        width,
-                        height,
-                        photo.faceX,
-                        photo.faceY,
-                        photo.faceWidth,
-                        photo.faceHeight,
-                        requireMutable = isDateOverlayEnabled
-                    )
+                try {
+                    for (photo in photos) {
+                        if (!isActive()) break
 
-                    if (bitmap != null) {
-                        if (isDateOverlayEnabled && datePaint != null) {
-                            drawDateOverlay(bitmap, photo.timestamp, datePaint, dateFormatter)
-                        }
+                        // Load and process bitmap into reusable frameBitmap
+                        val success = loadBitmap(
+                            Uri.parse(photo.originalUri),
+                            frameBitmap,
+                            photo.faceX,
+                            photo.faceY,
+                            photo.faceWidth,
+                            photo.faceHeight
+                        )
 
-                        // Convert ARGB Bitmap to YUV420SP (NV12)
-                        // Reads pixels directly from Bitmap in native code to avoid copy
-                        encodeYUV420SP(yuvBuffer, bitmap, width, height)
+                        if (success) {
+                            if (isDateOverlayEnabled && datePaint != null) {
+                                drawDateOverlay(frameBitmap, photo.timestamp, datePaint, dateFormatter)
+                            }
 
-                        // Feed to Encoder
-                        val inputBufferIndex = localEncoder.dequeueInputBuffer(10_000)
-                        if (inputBufferIndex >= 0) {
-                            localEncoder.getInputBuffer(inputBufferIndex)?.let { inputBuffer ->
-                                inputBuffer.clear()
-                                inputBuffer.put(yuvBuffer)
-                                localEncoder.queueInputBuffer(inputBufferIndex, 0, yuvBuffer.size, presentationTimeUs, 0)
-                                presentationTimeUs += frameDurationUs
+                            // Convert ARGB Bitmap to YUV420SP (NV12)
+                            // Reads pixels directly from Bitmap in native code to avoid copy
+                            encodeYUV420SP(yuvBuffer, frameBitmap, width, height)
+
+                            // Feed to Encoder
+                            val inputBufferIndex = localEncoder.dequeueInputBuffer(10_000)
+                            if (inputBufferIndex >= 0) {
+                                localEncoder.getInputBuffer(inputBufferIndex)?.let { inputBuffer ->
+                                    inputBuffer.clear()
+                                    inputBuffer.put(yuvBuffer)
+                                    localEncoder.queueInputBuffer(
+                                        inputBufferIndex,
+                                        0,
+                                        yuvBuffer.size,
+                                        presentationTimeUs,
+                                        0
+                                    )
+                                    presentationTimeUs += frameDurationUs
+                                }
                             }
                         }
-                        bitmap.recycle()
-                    }
 
-                    // Regular Drain
-                    drainEncoder(endOfStream = false)
+                        // Regular Drain
+                        drainEncoder(endOfStream = false)
+                    }
+                } finally {
+                    frameBitmap.recycle()
                 }
 
                 // End of Stream
@@ -250,27 +261,31 @@ class VideoGenerator @Inject constructor(
                         }
                     } else null
 
-                    for (photo in photos) {
-                        if (!isActive()) break
+                    // Reusable bitmap for frame rendering
+                    val frameBitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
 
-                        val bitmap = loadBitmap(
-                            Uri.parse(photo.originalUri),
-                            targetWidth,
-                            targetHeight,
-                            photo.faceX,
-                            photo.faceY,
-                            photo.faceWidth,
-                            photo.faceHeight,
-                            requireMutable = isDateOverlayEnabled
-                        )
+                    try {
+                        for (photo in photos) {
+                            if (!isActive()) break
 
-                        if (bitmap != null) {
-                            if (isDateOverlayEnabled && datePaint != null) {
-                                drawDateOverlay(bitmap, photo.timestamp, datePaint, dateFormatter)
+                            val success = loadBitmap(
+                                Uri.parse(photo.originalUri),
+                                frameBitmap,
+                                photo.faceX,
+                                photo.faceY,
+                                photo.faceWidth,
+                                photo.faceHeight
+                            )
+
+                            if (success) {
+                                if (isDateOverlayEnabled && datePaint != null) {
+                                    drawDateOverlay(frameBitmap, photo.timestamp, datePaint, dateFormatter)
+                                }
+                                encoder.addFrame(frameBitmap)
                             }
-                            encoder.addFrame(bitmap)
-                            bitmap.recycle()
                         }
+                    } finally {
+                        frameBitmap.recycle()
                     }
                     encoder.finish()
                 }
@@ -293,77 +308,72 @@ class VideoGenerator @Inject constructor(
 
     private fun loadBitmap(
         uri: Uri,
-        targetW: Int,
-        targetH: Int,
+        outBitmap: Bitmap,
         faceX: Float?,
         faceY: Float?,
         faceW: Float?,
-        faceH: Float?,
-        requireMutable: Boolean = true
-    ): Bitmap? {
+        faceH: Float?
+    ): Boolean {
         return try {
-             // Use optimized loading to reduce memory usage during export
-             val result = imageLoader.loadOptimizedBitmap(uri, targetW, targetH) ?: return null
-             val rotatedBitmap = result.bitmap
-             val sampleSize = result.sampleSize
+            val targetW = outBitmap.width
+            val targetH = outBitmap.height
 
-             val scale = Math.max(targetW.toFloat() / rotatedBitmap.width, targetH.toFloat() / rotatedBitmap.height)
-             val scaledW = (rotatedBitmap.width * scale).roundToInt()
-             val scaledH = (rotatedBitmap.height * scale).roundToInt()
+            // Use optimized loading to reduce memory usage during export
+            val result = imageLoader.loadOptimizedBitmap(uri, targetW, targetH) ?: return false
+            val rotatedBitmap = result.bitmap
+            val sampleSize = result.sampleSize
 
-             val scaledBitmap = Bitmap.createScaledBitmap(rotatedBitmap, scaledW, scaledH, true)
+            val scale = Math.max(targetW.toFloat() / rotatedBitmap.width, targetH.toFloat() / rotatedBitmap.height)
+            // scaledW/scaledH are virtual dimensions after scaling
+            val scaledW = (rotatedBitmap.width * scale).roundToInt()
+            val scaledH = (rotatedBitmap.height * scale).roundToInt()
 
-             var cropX = (scaledW - targetW) / 2
-             var cropY = (scaledH - targetH) / 2
+            var cropX = (scaledW - targetW) / 2
+            var cropY = (scaledH - targetH) / 2
 
-             if (faceX != null && faceY != null && faceW != null && faceH != null) {
-                  // Adjust full-resolution face coordinates to the loaded (potentially subsampled) bitmap coordinate system
-                  // faceX (Full) -> faceX / sampleSize (Loaded) -> * scale (Target)
-                  val sFaceX = (faceX / sampleSize) * scale
-                  val sFaceY = (faceY / sampleSize) * scale
-                  val sFaceW = (faceW / sampleSize) * scale
-                  val sFaceH = (faceH / sampleSize) * scale
+            if (faceX != null && faceY != null && faceW != null && faceH != null) {
+                // Adjust full-resolution face coordinates to the loaded (potentially subsampled) bitmap coordinate system
+                // faceX (Full) -> faceX / sampleSize (Loaded) -> * scale (Target)
+                val sFaceX = (faceX / sampleSize) * scale
+                val sFaceY = (faceY / sampleSize) * scale
+                val sFaceW = (faceW / sampleSize) * scale
+                val sFaceH = (faceH / sampleSize) * scale
 
-                  val faceCenterX = sFaceX + (sFaceW / 2)
-                  val faceCenterY = sFaceY + (sFaceH / 2)
+                val faceCenterX = sFaceX + (sFaceW / 2)
+                val faceCenterY = sFaceY + (sFaceH / 2)
 
-                  cropX = (faceCenterX - targetW / 2).toInt().coerceIn(0, scaledW - targetW)
-                  cropY = (faceCenterY - targetH / 2).toInt().coerceIn(0, scaledH - targetH)
-             } else if (faceX != null && faceY != null && faceW != null) {
-                  val sFaceX = (faceX / sampleSize) * scale
-                  val sFaceY = (faceY / sampleSize) * scale
-                  val sFaceW = (faceW / sampleSize) * scale
+                cropX = (faceCenterX - targetW / 2).toInt().coerceIn(0, scaledW - targetW)
+                cropY = (faceCenterY - targetH / 2).toInt().coerceIn(0, scaledH - targetH)
+            } else if (faceX != null && faceY != null && faceW != null) {
+                val sFaceX = (faceX / sampleSize) * scale
+                val sFaceY = (faceY / sampleSize) * scale
+                val sFaceW = (faceW / sampleSize) * scale
 
-                  val faceCenterX = sFaceX + (sFaceW / 2)
-                  val faceCenterY = sFaceY + (sFaceW / 2)
+                val faceCenterX = sFaceX + (sFaceW / 2)
+                val faceCenterY = sFaceY + (sFaceW / 2)
 
-                  cropX = (faceCenterX - targetW / 2).toInt().coerceIn(0, scaledW - targetW)
-                  cropY = (faceCenterY - targetH / 2).toInt().coerceIn(0, scaledH - targetH)
-             }
+                cropX = (faceCenterX - targetW / 2).toInt().coerceIn(0, scaledW - targetW)
+                cropY = (faceCenterY - targetH / 2).toInt().coerceIn(0, scaledH - targetH)
+            }
 
-             val finalBitmap = Bitmap.createBitmap(scaledBitmap, cropX, cropY, targetW, targetH)
-             if (finalBitmap != scaledBitmap && scaledBitmap != rotatedBitmap) scaledBitmap.recycle()
-             if (finalBitmap != rotatedBitmap) rotatedBitmap.recycle()
+            val canvas = Canvas(outBitmap)
+            val matrix = Matrix()
+            // Scale the source to virtual scaledW x scaledH
+            matrix.setScale(scale, scale)
+            // Translate so that the crop region starts at (0,0) in outBitmap
+            matrix.postTranslate(-cropX.toFloat(), -cropY.toFloat())
 
-             if (requireMutable) {
-                 val mutableBitmap = finalBitmap.copy(Bitmap.Config.ARGB_8888, true)
-                 if (mutableBitmap != finalBitmap) finalBitmap.recycle()
-                 mutableBitmap
-             } else {
-                 // Native code requires ARGB_8888 for direct pixel access
-                 if (finalBitmap.config != Bitmap.Config.ARGB_8888) {
-finalBitmap.copy(Bitmap.Config.ARGB_8888, false)?.also {
-    if (it != finalBitmap) {
-        finalBitmap.recycle()
-    }
-}
-                 } else {
-                     finalBitmap
-                 }
-             }
+            val paint = Paint()
+            paint.isFilterBitmap = true
+
+            canvas.drawColor(Color.BLACK) // Clear canvas
+            canvas.drawBitmap(rotatedBitmap, matrix, paint)
+
+            if (rotatedBitmap != outBitmap) rotatedBitmap.recycle()
+            true
         } catch (e: Exception) {
             e.printStackTrace()
-            null
+            false
         }
     }
 
