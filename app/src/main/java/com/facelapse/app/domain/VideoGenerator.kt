@@ -49,7 +49,7 @@ class VideoGenerator @Inject constructor(
                 try {
                     action()
                 } catch (e: Exception) {
-                    Log.e("VideoGenerator", errorMessage, e)
+                    Log.e(TAG, errorMessage, e)
                 }
             }
 
@@ -196,7 +196,7 @@ class VideoGenerator @Inject constructor(
 
                 success = true
             } catch (e: Exception) {
-                Log.e("VideoGenerator", "Error generating video", e)
+                Log.e(TAG, "Error generating video", e)
                 success = false
             } finally {
                 safeCleanup({ encoder?.stop() }, "Error stopping encoder")
@@ -275,7 +275,7 @@ class VideoGenerator @Inject constructor(
                     encoder.finish()
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.e(TAG, "Error generating GIF", e)
                 false
             }
         }
@@ -362,7 +362,7 @@ finalBitmap.copy(Bitmap.Config.ARGB_8888, false)?.also {
                  }
              }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "Error loading bitmap", e)
             null
         }
     }
@@ -385,6 +385,7 @@ finalBitmap.copy(Bitmap.Config.ARGB_8888, false)?.also {
     }
 
     companion object {
+        private val TAG = VideoGenerator::class.java.simpleName
         private const val BT601_Y_R = 66
         private const val BT601_Y_G = 129
         private const val BT601_Y_B = 25
@@ -405,7 +406,7 @@ finalBitmap.copy(Bitmap.Config.ARGB_8888, false)?.also {
             try {
                 System.loadLibrary("yuv_encoder")
             } catch (e: UnsatisfiedLinkError) {
-                Log.e("VideoGenerator", "Native library 'yuv_encoder' failed to load.", e)
+                Log.e(TAG, "Native library 'yuv_encoder' failed to load.", e)
                 throw e
             }
         }
