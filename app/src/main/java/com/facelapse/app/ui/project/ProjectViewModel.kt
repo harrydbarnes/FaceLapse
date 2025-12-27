@@ -179,16 +179,7 @@ class ProjectViewModel @Inject constructor(
 
     fun updateProjectSettings(fps: Float, exportAsGif: Boolean, isDateOverlayEnabled: Boolean) {
         viewModelScope.launch {
-            val currentProject = repository.getProject(projectId)
-            if (currentProject != null) {
-                repository.updateProject(
-                    currentProject.copy(
-                        fps = fps,
-                        exportAsGif = exportAsGif,
-                        isDateOverlayEnabled = isDateOverlayEnabled
-                    )
-                )
-            }
+            updateProjectInternal(fps, exportAsGif, isDateOverlayEnabled)
         }
     }
 
@@ -198,18 +189,23 @@ class ProjectViewModel @Inject constructor(
      */
     fun saveAndExport(context: Context, fps: Float, exportAsGif: Boolean, isDateOverlayEnabled: Boolean) {
         viewModelScope.launch {
-            val currentProject = repository.getProject(projectId) ?: return@launch
-
-            val updatedProject = currentProject.copy(
-                fps = fps,
-                exportAsGif = exportAsGif,
-                isDateOverlayEnabled = isDateOverlayEnabled
-            )
-            repository.updateProject(updatedProject)
-
-            // Proceed with export using the explicitly provided settings values
-            exportVideoInternal(context, updatedProject)
+            val updatedProject = updateProjectInternal(fps, exportAsGif, isDateOverlayEnabled)
+            if (updatedProject != null) {
+                // Proceed with export using the explicitly provided settings values
+                exportVideoInternal(context, updatedProject)
+            }
         }
+    }
+
+    private suspend fun updateProjectInternal(fps: Float, exportAsGif: Boolean, isDateOverlayEnabled: Boolean): ProjectEntity? {
+        val currentProject = repository.getProject(projectId) ?: return null
+        val updatedProject = currentProject.copy(
+            fps = fps,
+            exportAsGif = exportAsGif,
+            isDateOverlayEnabled = isDateOverlayEnabled
+        )
+        repository.updateProject(updatedProject)
+        return updatedProject
     }
 
     fun exportVideo(context: Context) {
