@@ -211,7 +211,8 @@ fun ProjectItem(project: ProjectEntity, onClick: () -> Unit) {
 fun CreateProjectDialog(onDismiss: () -> Unit, onCreate: (String) -> Unit) {
     var name by remember { mutableStateOf("") }
     val defaultName = remember {
-        SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date())
+        java.time.format.DateTimeFormatter.ofPattern("MMM dd, yyyy", Locale.getDefault())
+            .format(java.time.LocalDate.now())
     }
 
     AlertDialog(
