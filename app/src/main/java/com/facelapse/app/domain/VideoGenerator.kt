@@ -36,7 +36,7 @@ class VideoGenerator @Inject constructor(
         dateFormat: String,
         targetWidth: Int = 1080,
         targetHeight: Int = 1920,
-        fps: Int = 10
+        fps: Float = 10f
     ): Boolean {
         return withContext(Dispatchers.IO) {
             var encoder: MediaCodec? = null
@@ -62,7 +62,7 @@ class VideoGenerator @Inject constructor(
 
                 format.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420SemiPlanar)
                 format.setInteger(MediaFormat.KEY_BIT_RATE, 6_000_000)
-                format.setInteger(MediaFormat.KEY_FRAME_RATE, fps)
+                format.setFloat(MediaFormat.KEY_FRAME_RATE, fps)
                 format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
 
                 encoder = MediaCodec.createEncoderByType(mime)
@@ -116,7 +116,7 @@ class VideoGenerator @Inject constructor(
                 // 3. Pre-allocate buffer for YUV data (Y size + UV size)
                 val yuvBuffer = ByteArray(width * height * 3 / 2)
                 var presentationTimeUs = 0L
-                val frameDurationUs = 1_000_000L / fps
+                val frameDurationUs = (1_000_000.0 / fps).toLong()
 
                 // Pre-allocate buffers and objects to avoid allocation in loop
                 frameBuffer = FrameBuffer(width, height)
@@ -214,7 +214,7 @@ class VideoGenerator @Inject constructor(
         dateFormat: String,
         targetWidth: Int = 480,
         targetHeight: Int = 854,
-        fps: Int = 10
+        fps: Float = 10f
     ): Boolean {
         return withContext(Dispatchers.IO) {
             var frameBuffer: FrameBuffer? = null
@@ -227,7 +227,7 @@ class VideoGenerator @Inject constructor(
                 java.io.FileOutputStream(outputFile).use { fos ->
                     val encoder = AnimatedGifEncoder()
                     encoder.start(fos)
-                    encoder.setFrameRate(fps.toFloat())
+                    encoder.setFrameRate(fps)
                     encoder.setRepeat(0) // 0 = loop indefinitely
                     encoder.setQuality(10) // default
 

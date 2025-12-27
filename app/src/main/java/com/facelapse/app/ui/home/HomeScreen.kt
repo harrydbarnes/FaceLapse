@@ -210,6 +210,10 @@ fun ProjectItem(project: ProjectEntity, onClick: () -> Unit) {
 @Composable
 fun CreateProjectDialog(onDismiss: () -> Unit, onCreate: (String) -> Unit) {
     var name by remember { mutableStateOf("") }
+    val defaultName = remember {
+        SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date())
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("New Project") },
@@ -218,12 +222,13 @@ fun CreateProjectDialog(onDismiss: () -> Unit, onCreate: (String) -> Unit) {
                 value = name,
                 onValueChange = { name = it },
                 label = { Text("Project Name") },
+                placeholder = { Text(defaultName, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)) },
                 singleLine = true
             )
         },
         confirmButton = {
             Button(
-                onClick = { onCreate(name.ifBlank { "Untitled Project" }) }
+                onClick = { onCreate(name.ifBlank { defaultName }) }
             ) {
                 Text("Create")
             }

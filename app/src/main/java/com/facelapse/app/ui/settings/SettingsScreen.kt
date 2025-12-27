@@ -7,8 +7,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -31,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.facelapse.app.R
 import kotlin.math.roundToInt
+import java.text.DecimalFormat
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,7 +45,7 @@ fun SettingsScreen(
 ) {
     val isDateOverlayEnabled by viewModel.isDateOverlayEnabled.collectAsState(initial = true)
     val showDayOfWeek by viewModel.showDayOfWeek.collectAsState(initial = false)
-    val defaultFps by viewModel.defaultFps.collectAsState(initial = 10)
+    val defaultFps by viewModel.defaultFps.collectAsState(initial = 10f)
     val defaultExportGif by viewModel.defaultExportGif.collectAsState(initial = false)
 
     Scaffold(
@@ -60,7 +65,15 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .padding(16.dp)
+                .verticalScroll(rememberScrollState())
         ) {
+            Text(
+                text = "New Project Defaults",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
             SettingSwitchItem(
                 title = "Enable Date Overlay",
                 checked = isDateOverlayEnabled,
@@ -72,10 +85,11 @@ fun SettingsScreen(
                 onCheckedChange = { viewModel.setShowDayOfWeek(it) }
             )
             SettingSliderItem(
-                title = stringResource(R.string.settings_default_fps_format, defaultFps),
-                value = defaultFps.toFloat(),
-                valueRange = 1f..60f,
-                onValueChangeFinished = { viewModel.setDefaultFps(it.roundToInt()) }
+                title = stringResource(R.string.settings_default_fps_format, DecimalFormat("#.##").format(defaultFps)),
+                value = defaultFps,
+                valueRange = 0.25f..10f,
+                steps = 38,
+                onValueChangeFinished = { viewModel.setDefaultFps(it) }
             )
             SettingSwitchItem(
                 title = stringResource(R.string.settings_default_export_format),
@@ -83,6 +97,26 @@ fun SettingsScreen(
                 checked = defaultExportGif,
                 onCheckedChange = { viewModel.setDefaultExportGif(it) }
             )
+
+            Spacer(modifier = Modifier.height(24.dp))
+            Text(
+                text = "Apply Defaults",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Apply these default settings (FPS, Date Overlay, Format) to all existing projects.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Button(
+                onClick = { viewModel.applyDefaultsToAllProjects() },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Apply to All Existing Projects")
+            }
         }
     }
 }
@@ -126,6 +160,7 @@ fun SettingSliderItem(
     title: String,
     value: Float,
     valueRange: ClosedFloatingPointRange<Float>,
+    steps: Int = 0,
     onValueChangeFinished: (Float) -> Unit
 ) {
     var sliderPosition by remember(value) { mutableStateOf(value) }
@@ -143,6 +178,7 @@ fun SettingSliderItem(
             value = sliderPosition,
             onValueChange = { sliderPosition = it },
             valueRange = valueRange,
+            steps = steps,
             onValueChangeFinished = { onValueChangeFinished(sliderPosition) }
         )
     }

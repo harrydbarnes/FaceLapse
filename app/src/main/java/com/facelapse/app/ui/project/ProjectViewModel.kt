@@ -177,7 +177,7 @@ class ProjectViewModel @Inject constructor(
         }
     }
 
-    fun updateProjectSettings(fps: Int, exportAsGif: Boolean, isDateOverlayEnabled: Boolean) {
+    fun updateProjectSettings(fps: Float, exportAsGif: Boolean, isDateOverlayEnabled: Boolean) {
         viewModelScope.launch {
             val currentProject = repository.getProject(projectId)
             if (currentProject != null) {
@@ -192,56 +192,80 @@ class ProjectViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Atomically saves settings and then triggers export to prevent race conditions where
+     * the export uses stale settings.
+     */
+    fun saveAndExport(context: Context, fps: Float, exportAsGif: Boolean, isDateOverlayEnabled: Boolean) {
+        viewModelScope.launch {
+            val currentProject = repository.getProject(projectId) ?: return@launch
+
+            val updatedProject = currentProject.copy(
+                fps = fps,
+                exportAsGif = exportAsGif,
+                isDateOverlayEnabled = isDateOverlayEnabled
+            )
+            repository.updateProject(updatedProject)
+
+            // Proceed with export using the explicitly provided settings values
+            exportVideoInternal(context, updatedProject)
+        }
+    }
+
     fun exportVideo(context: Context) {
         viewModelScope.launch {
-            _isGenerating.value = true
-            val currentPhotos = repository.getPhotosList(projectId)
             val projectEntity = repository.getProject(projectId) ?: return@launch
-
-            val safeName = projectEntity.name.replace(Regex("[^a-zA-Z0-9.-]"), "_")
-            val timestamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.getDefault()).format(java.util.Date())
-
-            // Use project specific setting for on/off
-            val isDateOverlayEnabled = projectEntity.isDateOverlayEnabled
-
-            // Use global settings for styling
-            val dateFontSize = settingsRepository.dateFontSize.first()
-            val dateFormat = settingsRepository.dateFormat.first()
-
-            var success = false
-            val outputFile: File
-            val mimeType: String
-
-            if (projectEntity.exportAsGif) {
-                outputFile = File(context.cacheDir, "facelapse_${safeName}_${timestamp}.gif")
-                mimeType = "image/gif"
-                success = videoGenerator.generateGif(
-                    photos = currentPhotos,
-                    outputFile = outputFile,
-                    isDateOverlayEnabled = isDateOverlayEnabled,
-                    dateFontSize = dateFontSize,
-                    dateFormat = dateFormat,
-                    fps = projectEntity.fps
-                )
-            } else {
-                outputFile = File(context.cacheDir, "facelapse_${safeName}_${timestamp}.mp4")
-                mimeType = "video/mp4"
-                success = videoGenerator.generateVideo(
-                    photos = currentPhotos,
-                    outputFile = outputFile,
-                    isDateOverlayEnabled = isDateOverlayEnabled,
-                    dateFontSize = dateFontSize,
-                    dateFormat = dateFormat,
-                    fps = projectEntity.fps
-                )
-            }
-
-            if (success) {
-                val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", outputFile)
-                _exportResult.value = ExportResult(outputFile, uri, mimeType)
-            }
-            _isGenerating.value = false
+            exportVideoInternal(context, projectEntity)
         }
+    }
+
+    private suspend fun exportVideoInternal(context: Context, projectEntity: ProjectEntity) {
+        _isGenerating.value = true
+        val currentPhotos = repository.getPhotosList(projectId)
+
+        val safeName = projectEntity.name.replace(Regex("[^a-zA-Z0-9.-]"), "_")
+        val timestamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.getDefault()).format(java.util.Date())
+
+        // Use project specific setting for on/off
+        val isDateOverlayEnabled = projectEntity.isDateOverlayEnabled
+
+        // Use global settings for styling
+        val dateFontSize = settingsRepository.dateFontSize.first()
+        val dateFormat = settingsRepository.dateFormat.first()
+
+        var success = false
+        val outputFile: File
+        val mimeType: String
+
+        if (projectEntity.exportAsGif) {
+            outputFile = File(context.cacheDir, "facelapse_${safeName}_${timestamp}.gif")
+            mimeType = "image/gif"
+            success = videoGenerator.generateGif(
+                photos = currentPhotos,
+                outputFile = outputFile,
+                isDateOverlayEnabled = isDateOverlayEnabled,
+                dateFontSize = dateFontSize,
+                dateFormat = dateFormat,
+                fps = projectEntity.fps
+            )
+        } else {
+            outputFile = File(context.cacheDir, "facelapse_${safeName}_${timestamp}.mp4")
+            mimeType = "video/mp4"
+            success = videoGenerator.generateVideo(
+                photos = currentPhotos,
+                outputFile = outputFile,
+                isDateOverlayEnabled = isDateOverlayEnabled,
+                dateFontSize = dateFontSize,
+                dateFormat = dateFormat,
+                fps = projectEntity.fps
+            )
+        }
+
+        if (success) {
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", outputFile)
+            _exportResult.value = ExportResult(outputFile, uri, mimeType)
+        }
+        _isGenerating.value = false
     }
 
     fun shareFile(context: Context, uri: Uri, mimeType: String) {
