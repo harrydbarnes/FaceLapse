@@ -85,7 +85,7 @@ fun SettingsScreen(
                 onCheckedChange = { viewModel.setShowDayOfWeek(it) }
             )
             SettingSliderItem(
-                title = stringResource(R.string.settings_default_fps_format, DecimalFormat("#.##").format(defaultFps)),
+                title = stringResource(R.string.settings_default_fps_format, remember { DecimalFormat("#.##") }.format(defaultFps)),
                 value = defaultFps,
                 valueRange = 0.25f..10f,
                 steps = 38,
