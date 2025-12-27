@@ -224,7 +224,7 @@ class ProjectViewModel @Inject constructor(
         val currentPhotos = repository.getPhotosList(projectId)
 
         val safeName = projectEntity.name.replace(Regex("[^a-zA-Z0-9.-]"), "_")
-        val timestamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.getDefault()).format(java.util.Date())
+        val timestamp = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss").format(java.time.LocalDateTime.now())
 
         // Use project specific setting for on/off
         val isDateOverlayEnabled = projectEntity.isDateOverlayEnabled
