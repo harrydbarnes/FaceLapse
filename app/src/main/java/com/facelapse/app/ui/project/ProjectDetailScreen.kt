@@ -323,8 +323,8 @@ fun ProjectSettingsDialog(
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 // Animation Speed
                 Column {
-                    val formattedFps = DecimalFormat("#.##").format(fps)
-                    Text("Animation Speed: $formattedFps FPS")
+                    val decimalFormat = remember { DecimalFormat("#.##") }
+                    Text("Animation Speed: ${decimalFormat.format(fps)} FPS")
                     Slider(
                         value = fps,
                         onValueChange = { fps = it },
