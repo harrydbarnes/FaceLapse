@@ -38,6 +38,10 @@ class ProjectViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
+    companion object {
+        private val timestampFormatter = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")
+    }
+
     private val projectId: String = checkNotNull(savedStateHandle["projectId"])
 
     val project: StateFlow<ProjectEntity?> = repository.getProjectFlow(projectId)
@@ -220,7 +224,7 @@ class ProjectViewModel @Inject constructor(
         val currentPhotos = repository.getPhotosList(projectId)
 
         val safeName = projectEntity.name.replace(Regex("[^a-zA-Z0-9.-]"), "_")
-        val timestamp = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss").format(java.time.LocalDateTime.now())
+        val timestamp = timestampFormatter.format(java.time.LocalDateTime.now())
 
         // Use project specific setting for on/off
         val isDateOverlayEnabled = projectEntity.isDateOverlayEnabled

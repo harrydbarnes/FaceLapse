@@ -328,14 +328,7 @@ fun ProjectSettingsDialog(
                     Slider(
                         value = fps,
                         onValueChange = { fps = it },
-                        // Range: 0.25 to 10.
-                        // However, standard continuous slider makes hitting exact values hard.
-                        // We will allow continuous adjustment or fine steps.
-                        // Given requirement: "below 1 options of .25, .5 and .75"
-                        // We can use a custom step count or let it be continuous.
-                        // Let's use continuous range 0.25f .. 10f.
                         valueRange = 0.25f..10f,
-                        // Steps: (10 - 0.25) / 0.25 = 39 steps
                         steps = 38
                     )
                 }

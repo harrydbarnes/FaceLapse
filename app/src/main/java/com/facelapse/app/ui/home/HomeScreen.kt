@@ -60,6 +60,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+private val defaultProjectNameFormatter = java.time.format.DateTimeFormatter.ofPattern("MMM dd, yyyy", Locale.getDefault())
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
@@ -211,8 +213,7 @@ fun ProjectItem(project: ProjectEntity, onClick: () -> Unit) {
 fun CreateProjectDialog(onDismiss: () -> Unit, onCreate: (String) -> Unit) {
     var name by remember { mutableStateOf("") }
     val defaultName = remember {
-        java.time.format.DateTimeFormatter.ofPattern("MMM dd, yyyy", Locale.getDefault())
-            .format(java.time.LocalDate.now())
+        defaultProjectNameFormatter.format(java.time.LocalDate.now())
     }
 
     AlertDialog(

@@ -48,6 +48,8 @@ fun SettingsScreen(
     val defaultFps by viewModel.defaultFps.collectAsState(initial = 10f)
     val defaultExportGif by viewModel.defaultExportGif.collectAsState(initial = false)
 
+    var showConfirmDialog by remember { mutableStateOf(false) }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -112,12 +114,29 @@ fun SettingsScreen(
             )
             Spacer(modifier = Modifier.height(8.dp))
             Button(
-                onClick = { viewModel.applyDefaultsToAllProjects() },
+                onClick = { showConfirmDialog = true },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Apply to All Existing Projects")
             }
         }
+    }
+
+    if (showConfirmDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showConfirmDialog = false },
+            title = { Text("Confirm Action") },
+            text = { Text("This will apply the current default settings to all existing projects. This action cannot be undone. Are you sure?") },
+            confirmButton = {
+                Button(onClick = {
+                    viewModel.applyDefaultsToAllProjects()
+                    showConfirmDialog = false
+                }) { Text("Apply") }
+            },
+            dismissButton = {
+                Button(onClick = { showConfirmDialog = false }) { Text("Cancel") }
+            }
+        )
     }
 }
 
