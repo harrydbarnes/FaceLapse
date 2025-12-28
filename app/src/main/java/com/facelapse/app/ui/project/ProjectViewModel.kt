@@ -40,6 +40,7 @@ class ProjectViewModel @Inject constructor(
 
     companion object {
         private val timestampFormatter = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")
+        private val SAFE_FILENAME_REGEX = Regex("[^a-zA-Z0-9.-]")
     }
 
     private val projectId: String = checkNotNull(savedStateHandle["projectId"])
@@ -223,7 +224,7 @@ class ProjectViewModel @Inject constructor(
         _isGenerating.value = true
         val currentPhotos = repository.getPhotosList(projectId)
 
-        val safeName = projectEntity.name.replace(Regex("[^a-zA-Z0-9.-]"), "_")
+        val safeName = projectEntity.name.replace(SAFE_FILENAME_REGEX, "_")
         val timestamp = timestampFormatter.format(java.time.LocalDateTime.now())
 
         // Use project specific setting for on/off
@@ -233,33 +234,40 @@ class ProjectViewModel @Inject constructor(
         val dateFontSize = settingsRepository.dateFontSize.first()
         val dateFormat = settingsRepository.dateFormat.first()
 
-        var success = false
-        val outputFile: File
+        val extension: String
         val mimeType: String
+        val generator: suspend (File) -> Boolean
 
         if (projectEntity.exportAsGif) {
-            outputFile = File(context.cacheDir, "facelapse_${safeName}_${timestamp}.gif")
+            extension = "gif"
             mimeType = "image/gif"
-            success = videoGenerator.generateGif(
-                photos = currentPhotos,
-                outputFile = outputFile,
-                isDateOverlayEnabled = isDateOverlayEnabled,
-                dateFontSize = dateFontSize,
-                dateFormat = dateFormat,
-                fps = projectEntity.fps
-            )
+            generator = { file ->
+                videoGenerator.generateGif(
+                    photos = currentPhotos,
+                    outputFile = file,
+                    isDateOverlayEnabled = isDateOverlayEnabled,
+                    dateFontSize = dateFontSize,
+                    dateFormat = dateFormat,
+                    fps = projectEntity.fps
+                )
+            }
         } else {
-            outputFile = File(context.cacheDir, "facelapse_${safeName}_${timestamp}.mp4")
+            extension = "mp4"
             mimeType = "video/mp4"
-            success = videoGenerator.generateVideo(
-                photos = currentPhotos,
-                outputFile = outputFile,
-                isDateOverlayEnabled = isDateOverlayEnabled,
-                dateFontSize = dateFontSize,
-                dateFormat = dateFormat,
-                fps = projectEntity.fps
-            )
+            generator = { file ->
+                videoGenerator.generateVideo(
+                    photos = currentPhotos,
+                    outputFile = file,
+                    isDateOverlayEnabled = isDateOverlayEnabled,
+                    dateFontSize = dateFontSize,
+                    dateFormat = dateFormat,
+                    fps = projectEntity.fps
+                )
+            }
         }
+
+        val outputFile = File(context.cacheDir, "facelapse_${safeName}_${timestamp}.$extension")
+        val success = generator(outputFile)
 
         if (success) {
             val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", outputFile)
