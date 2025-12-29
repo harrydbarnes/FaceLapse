@@ -315,6 +315,7 @@ fun ProjectSettingsDialog(
     var fps: Float by remember { mutableStateOf(project.fps) }
     var exportAsGif: Boolean by remember { mutableStateOf(project.exportAsGif) }
     var isDateOverlayEnabled: Boolean by remember { mutableStateOf(project.isDateOverlayEnabled) }
+    val decimalFormat = remember { DecimalFormat("#.##") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -323,7 +324,6 @@ fun ProjectSettingsDialog(
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 // Animation Speed
                 Column {
-                    val decimalFormat = remember { DecimalFormat("#.##") }
                     Text("Animation Speed: ${decimalFormat.format(fps)} FPS")
                     Slider(
                         value = fps,

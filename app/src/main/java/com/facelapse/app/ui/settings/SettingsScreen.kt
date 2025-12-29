@@ -49,6 +49,7 @@ fun SettingsScreen(
     val defaultExportGif by viewModel.defaultExportGif.collectAsState(initial = false)
 
     var showConfirmDialog by remember { mutableStateOf(false) }
+    val decimalFormat = remember { DecimalFormat("#.##") }
 
     Scaffold(
         topBar = {
@@ -87,7 +88,7 @@ fun SettingsScreen(
                 onCheckedChange = { viewModel.setShowDayOfWeek(it) }
             )
             SettingSliderItem(
-                title = stringResource(R.string.settings_default_fps_format, remember { DecimalFormat("#.##") }.format(defaultFps)),
+                title = stringResource(R.string.settings_default_fps_format, decimalFormat.format(defaultFps)),
                 value = defaultFps,
                 valueRange = 0.25f..10f,
                 steps = 38,
