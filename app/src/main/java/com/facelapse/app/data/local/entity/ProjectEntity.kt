@@ -10,6 +10,6 @@ data class ProjectEntity(
     val name: String,
     val createdAt: Long = System.currentTimeMillis(),
     val isDateOverlayEnabled: Boolean = true,
-    val fps: Int = 10,
+    val fps: Float = 10f,
     val exportAsGif: Boolean = false
 )

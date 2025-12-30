@@ -62,6 +62,7 @@ import com.google.mlkit.vision.face.Face
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.min
+import java.text.DecimalFormat
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -252,8 +253,8 @@ fun ProjectDetailScreen(
                 onSave = { fps, isGif, isOverlay ->
                     viewModel.updateProjectSettings(fps, isGif, isOverlay)
                 },
-                onExport = {
-                    viewModel.exportVideo(context)
+                onExport = { fps, isGif, isOverlay ->
+                    viewModel.saveAndExport(context, fps, isGif, isOverlay)
                 }
             )
         }
@@ -308,12 +309,13 @@ private fun ActionTooltip(
 fun ProjectSettingsDialog(
     project: ProjectEntity,
     onDismiss: () -> Unit,
-    onSave: (Int, Boolean, Boolean) -> Unit,
-    onExport: () -> Unit
+    onSave: (Float, Boolean, Boolean) -> Unit,
+    onExport: (Float, Boolean, Boolean) -> Unit
 ) {
-    var fps: Float by remember { mutableStateOf(project.fps.toFloat()) }
+    var fps: Float by remember { mutableStateOf(project.fps) }
     var exportAsGif: Boolean by remember { mutableStateOf(project.exportAsGif) }
     var isDateOverlayEnabled: Boolean by remember { mutableStateOf(project.isDateOverlayEnabled) }
+    val decimalFormat = remember { DecimalFormat("#.##") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -322,12 +324,12 @@ fun ProjectSettingsDialog(
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 // Animation Speed
                 Column {
-                    Text("Animation Speed: ${fps.toInt()} FPS")
+                    Text("Animation Speed: ${decimalFormat.format(fps)} FPS")
                     Slider(
                         value = fps,
                         onValueChange = { fps = it },
-                        valueRange = 1f..60f,
-                        steps = 59
+                        valueRange = 0.25f..10f,
+                        steps = 38
                     )
                 }
 
@@ -400,20 +402,17 @@ fun ProjectSettingsDialog(
         },
         confirmButton = {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                fun performSave() = onSave(fps.toInt(), exportAsGif, isDateOverlayEnabled)
-
                 Button(onClick = onDismiss) {
                     Text("Cancel")
                 }
                 Button(onClick = {
-                    performSave()
+                    onSave(fps, exportAsGif, isDateOverlayEnabled)
                     onDismiss()
                 }) {
                     Text("Save")
                 }
                 Button(onClick = {
-                    performSave()
-                    onExport()
+                    onExport(fps, exportAsGif, isDateOverlayEnabled)
                     onDismiss()
                 }) {
                     Text("Share")

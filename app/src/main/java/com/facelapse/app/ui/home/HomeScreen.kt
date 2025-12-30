@@ -60,6 +60,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+private val defaultProjectNameFormatter = java.time.format.DateTimeFormatter.ofPattern("MMM dd, yyyy", Locale.getDefault())
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
@@ -210,6 +212,10 @@ fun ProjectItem(project: ProjectEntity, onClick: () -> Unit) {
 @Composable
 fun CreateProjectDialog(onDismiss: () -> Unit, onCreate: (String) -> Unit) {
     var name by remember { mutableStateOf("") }
+    val defaultName = remember {
+        defaultProjectNameFormatter.format(java.time.LocalDate.now())
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("New Project") },
@@ -218,12 +224,13 @@ fun CreateProjectDialog(onDismiss: () -> Unit, onCreate: (String) -> Unit) {
                 value = name,
                 onValueChange = { name = it },
                 label = { Text("Project Name") },
+                placeholder = { Text(defaultName, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)) },
                 singleLine = true
             )
         },
         confirmButton = {
             Button(
-                onClick = { onCreate(name.ifBlank { "Untitled Project" }) }
+                onClick = { onCreate(name.ifBlank { defaultName }) }
             ) {
                 Text("Create")
             }

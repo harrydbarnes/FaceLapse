@@ -26,12 +26,42 @@ object DatabaseModule {
             }
         }
 
+        val MIGRATION_2_3 = object : androidx.room.migration.Migration(2, 3) {
+            override fun migrate(database: androidx.sqlite.db.SupportSQLiteDatabase) {
+                // 1. Create new table with fps as REAL
+                database.execSQL("""
+                    CREATE TABLE projects_new (
+                        id TEXT NOT NULL,
+                        name TEXT NOT NULL,
+                        createdAt INTEGER NOT NULL,
+                        isDateOverlayEnabled INTEGER NOT NULL,
+                        fps REAL NOT NULL,
+                        exportAsGif INTEGER NOT NULL,
+                        PRIMARY KEY(id)
+                    )
+                """)
+
+                // 2. Copy data, casting fps to REAL
+                database.execSQL("""
+                    INSERT INTO projects_new (id, name, createdAt, isDateOverlayEnabled, fps, exportAsGif)
+                    SELECT id, name, createdAt, isDateOverlayEnabled, CAST(fps AS REAL), exportAsGif
+                    FROM projects
+                """)
+
+                // 3. Drop old table
+                database.execSQL("DROP TABLE projects")
+
+                // 4. Rename new table
+                database.execSQL("ALTER TABLE projects_new RENAME TO projects")
+            }
+        }
+
         return Room.databaseBuilder(
             context,
             FaceLapseDatabase::class.java,
             "facelapse.db"
         )
-        .addMigrations(MIGRATION_1_2)
+        .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
         .build()
     }
 

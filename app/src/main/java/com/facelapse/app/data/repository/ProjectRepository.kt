@@ -19,7 +19,7 @@ class ProjectRepository @Inject constructor(
 
     fun getProjectFlow(id: String): Flow<ProjectEntity?> = projectDao.getProjectFlow(id)
 
-    suspend fun createProject(name: String, fps: Int, exportAsGif: Boolean) {
+    suspend fun createProject(name: String, fps: Float, exportAsGif: Boolean) {
         projectDao.insertProject(ProjectEntity(name = name, fps = fps, exportAsGif = exportAsGif))
     }
 
@@ -33,6 +33,10 @@ class ProjectRepository @Inject constructor(
 
     suspend fun deleteProject(project: ProjectEntity) {
         projectDao.deleteProject(project)
+    }
+
+    suspend fun updateAllProjectsSettings(fps: Float, exportAsGif: Boolean, isDateOverlayEnabled: Boolean) {
+        projectDao.updateAllProjectsSettings(fps, exportAsGif, isDateOverlayEnabled)
     }
 
     fun getPhotosForProject(projectId: String): Flow<List<PhotoEntity>> = photoDao.getPhotosForProject(projectId)

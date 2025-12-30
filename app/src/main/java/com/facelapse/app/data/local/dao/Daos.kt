@@ -32,6 +32,9 @@ interface ProjectDao {
 
     @Query("UPDATE projects SET name = :name WHERE id = :id")
     suspend fun renameProject(id: String, name: String)
+
+    @Query("UPDATE projects SET fps = :fps, exportAsGif = :exportAsGif, isDateOverlayEnabled = :isDateOverlayEnabled")
+    suspend fun updateAllProjectsSettings(fps: Float, exportAsGif: Boolean, isDateOverlayEnabled: Boolean)
 }
 
 @Dao

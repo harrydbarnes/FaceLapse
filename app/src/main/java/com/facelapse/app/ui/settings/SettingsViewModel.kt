@@ -2,14 +2,17 @@ package com.facelapse.app.ui.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.facelapse.app.data.repository.ProjectRepository
 import com.facelapse.app.data.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
-    private val repository: SettingsRepository
+    private val repository: SettingsRepository,
+    private val projectRepository: ProjectRepository
 ) : ViewModel() {
     val isDateOverlayEnabled = repository.isDateOverlayEnabled
     val showDayOfWeek = repository.showDayOfWeek
@@ -28,7 +31,7 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun setDefaultFps(fps: Int) {
+    fun setDefaultFps(fps: Float) {
         viewModelScope.launch {
             repository.setDefaultFps(fps)
         }
@@ -37,6 +40,15 @@ class SettingsViewModel @Inject constructor(
     fun setDefaultExportGif(exportGif: Boolean) {
         viewModelScope.launch {
             repository.setDefaultExportGif(exportGif)
+        }
+    }
+
+    fun applyDefaultsToAllProjects() {
+        viewModelScope.launch {
+            val fps = repository.defaultFps.first()
+            val exportGif = repository.defaultExportGif.first()
+            val overlay = repository.isDateOverlayEnabled.first()
+            projectRepository.updateAllProjectsSettings(fps, exportGif, overlay)
         }
     }
 }
