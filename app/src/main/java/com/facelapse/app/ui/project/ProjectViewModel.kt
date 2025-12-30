@@ -225,7 +225,7 @@ class ProjectViewModel @Inject constructor(
         viewModelScope.launch {
             _isGenerating.value = true
             try {
-                val projectEntity = repository.getProject(projectId)
+                val projectEntity = project.value
                 if (projectEntity != null) {
                     exportVideoInternal(context, projectEntity)
                 } else {
