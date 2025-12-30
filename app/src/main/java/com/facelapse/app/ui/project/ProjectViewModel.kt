@@ -194,10 +194,18 @@ class ProjectViewModel @Inject constructor(
      */
     fun saveAndExport(context: Context, fps: Float, exportAsGif: Boolean, isDateOverlayEnabled: Boolean) {
         viewModelScope.launch {
-            val updatedProject = updateProjectInternal(fps, exportAsGif, isDateOverlayEnabled)
-            if (updatedProject != null) {
-                // Proceed with export using the explicitly provided settings values
-                exportVideoInternal(context, updatedProject)
+            _isGenerating.value = true
+            try {
+                val updatedProject = updateProjectInternal(fps, exportAsGif, isDateOverlayEnabled)
+                if (updatedProject != null) {
+                    // exportVideoInternal will set _isGenerating to false in its own finally block.
+                    exportVideoInternal(context, updatedProject)
+                } else {
+                    _isGenerating.value = false
+                }
+            } catch (e: Exception) {
+                // Ensure loading state is reset on any failure.
+                _isGenerating.value = false
             }
         }
     }
@@ -215,8 +223,17 @@ class ProjectViewModel @Inject constructor(
 
     fun exportVideo(context: Context) {
         viewModelScope.launch {
-            val projectEntity = repository.getProject(projectId) ?: return@launch
-            exportVideoInternal(context, projectEntity)
+            _isGenerating.value = true
+            try {
+                val projectEntity = repository.getProject(projectId)
+                if (projectEntity != null) {
+                    exportVideoInternal(context, projectEntity)
+                } else {
+                    _isGenerating.value = false
+                }
+            } catch (e: Exception) {
+                _isGenerating.value = false
+            }
         }
     }
 
