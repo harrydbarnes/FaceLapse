@@ -27,21 +27,30 @@ class FaceDetectorHelper @Inject constructor(
             .build()
     )
 
-    // Changed return type to List<Face>
-    suspend fun detectFaces(uri: Uri): List<Face> {
+    // Changed return type to FaceDetectionResult
+    suspend fun detectFaces(uri: Uri): FaceDetectionResult {
         return withContext(Dispatchers.IO) {
-            val bitmap = imageLoader.loadUprightBitmap(uri) ?: return@withContext emptyList()
+            val bitmap = imageLoader.loadUprightBitmap(uri) ?: return@withContext FaceDetectionResult(emptyList(), 0, 0)
+            val width = bitmap.width
+            val height = bitmap.height
             try {
                 // InputImage.fromBitmap(bitmap, 0) because the bitmap is already upright
                 val inputImage = InputImage.fromBitmap(bitmap, 0)
                 val task = detector.process(inputImage)
-                Tasks.await(task) // Return list of faces
+                val faces = Tasks.await(task) // Return list of faces
+                FaceDetectionResult(faces, width, height)
             } catch (e: Exception) {
                 android.util.Log.e("FaceDetectorHelper", "Error detecting faces", e)
-                emptyList()
+                FaceDetectionResult(emptyList(), width, height)
             } finally {
                 bitmap.recycle()
             }
         }
     }
 }
+
+data class FaceDetectionResult(
+    val faces: List<Face>,
+    val width: Int,
+    val height: Int
+)
