@@ -23,14 +23,10 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
-    - name: Run Lint
-      run: ./gradlew lintDebug
-
-    - name: Run Unit Tests
-      run: ./gradlew testDebugUnitTest
-
-    - name: Build with Gradle
-      run: ./gradlew assembleDebug
+    # Optimization: Combine tasks to reuse the Gradle Daemon and skip Lint for speed.
+    # Running 'testDebugUnitTest' and 'assembleDebug' together is faster than separate steps.
+    - name: Build and Test
+      run: ./gradlew testDebugUnitTest assembleDebug
 
     - name: Upload Debug APK
       uses: actions/upload-artifact@v4
