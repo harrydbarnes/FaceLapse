@@ -170,45 +170,44 @@ class ProjectViewModel @Inject constructor(
                 if (width == 0 || height == 0) return@forEach
 
                 if (photo.isProcessed) {
-                    val fx = photo.faceX ?: 0f
-                    val fy = photo.faceY ?: 0f
-                    val fw = photo.faceWidth ?: 0f
-                    val fh = photo.faceHeight ?: 0f
+                    val fx = photo.faceX
+                    val fy = photo.faceY
+                    val fw = photo.faceWidth
+                    val fh = photo.faceHeight
 
-                    val centerX = fx + fw / 2f
-                    val centerY = fy + fh / 2f
-                    previousFaceCenter = PointF(centerX / width, centerY / height)
+                    previousFaceCenter = if (fx != null && fy != null && fw != null && fh != null) {
+                        PointF((fx + fw / 2f) / width, (fy + fh / 2f) / height)
+                    } else {
+                        null
+                    }
                 } else {
-                    if (faces.isNotEmpty()) {
-                        val bestFace = if (previousFaceCenter == null) {
-                            // First frame or lost track: Largest face
-                            faces.maxByOrNull { it.boundingBox.width() * it.boundingBox.height() }
-                        } else {
-                            // Find closest to previous center
-                            faces.minByOrNull { face ->
-                                val cx = face.boundingBox.centerX().toFloat() / width
-                                val cy = face.boundingBox.centerY().toFloat() / height
-                                hypot(cx - previousFaceCenter!!.x, cy - previousFaceCenter!!.y)
-                            }
+                    val bestFace = if (previousFaceCenter == null) {
+                        // First frame or lost track: Largest face
+                        faces.maxByOrNull { it.boundingBox.width() * it.boundingBox.height() }
+                    } else {
+                        val prevCenter = previousFaceCenter
+                        // Find closest to previous center
+                        faces.minByOrNull { face ->
+                            val cx = face.boundingBox.centerX().toFloat() / width
+                            val cy = face.boundingBox.centerY().toFloat() / height
+                            hypot(cx - prevCenter.x, cy - prevCenter.y)
                         }
+                    }
 
-                        if (bestFace != null) {
-                            val updatedPhoto = photo.copy(
-                                isProcessed = true,
-                                faceX = bestFace.boundingBox.left.toFloat(),
-                                faceY = bestFace.boundingBox.top.toFloat(),
-                                faceWidth = bestFace.boundingBox.width().toFloat(),
-                                faceHeight = bestFace.boundingBox.height().toFloat()
-                            )
-                            repository.updatePhoto(updatedPhoto)
+                    if (bestFace != null) {
+                        val updatedPhoto = photo.copy(
+                            isProcessed = true,
+                            faceX = bestFace.boundingBox.left.toFloat(),
+                            faceY = bestFace.boundingBox.top.toFloat(),
+                            faceWidth = bestFace.boundingBox.width().toFloat(),
+                            faceHeight = bestFace.boundingBox.height().toFloat()
+                        )
+                        repository.updatePhoto(updatedPhoto)
 
-                            // Update reference
-                            val cx = bestFace.boundingBox.centerX().toFloat() / width
-                            val cy = bestFace.boundingBox.centerY().toFloat() / height
-                            previousFaceCenter = PointF(cx, cy)
-                        } else {
-                            repository.updatePhoto(photo.copy(isProcessed = true))
-                        }
+                        // Update reference
+                        val cx = bestFace.boundingBox.centerX().toFloat() / width
+                        val cy = bestFace.boundingBox.centerY().toFloat() / height
+                        previousFaceCenter = PointF(cx, cy)
                     } else {
                         repository.updatePhoto(photo.copy(isProcessed = true))
                     }
