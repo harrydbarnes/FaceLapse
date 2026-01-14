@@ -17,4 +17,8 @@
 
 # Keep Room entities based on annotation.
 # This ensures data model classes are preserved regardless of package.
--keep @androidx.room.Entity class * { *; }
+# Optimized to only keep fields and constructors required by Room.
+-keep @androidx.room.Entity class * {
+    <fields>;
+    <init>(...);
+}
