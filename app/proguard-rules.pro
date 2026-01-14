@@ -10,15 +10,9 @@
 }
 
 # ML Kit Face Detection rules
-# Optimized to keep only necessary public members for shrinking
--keep public class com.google.mlkit.vision.face.* {
-    public <init>(...);
-    public <methods>;
-}
--keep public class com.google.android.gms.internal.mlkit_vision_face.* {
-    public <init>(...);
-    public <methods>;
-}
+# Using broad rules to ensure stability across subpackages and internal members.
+-keep class com.google.mlkit.vision.face.** { *; }
+-keep class com.google.android.gms.internal.mlkit_vision_face.** { *; }
 
 # Keep Room entities based on annotation.
 # This ensures data model classes are preserved regardless of package.
