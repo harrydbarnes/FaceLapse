@@ -11,7 +11,7 @@
 
 # ML Kit Face Detection rules
 -keep public class com.google.mlkit.vision.face.** { *; }
--keep public class com.google.android.gms.vision.face.** { *; }
+-keep public class com.google.mlkit.vision.common.** { *; }
 
 # Keep data model classes (e.g., Room entities) from being obfuscated.
 # This is a safeguard against issues with reflection, serialization, or Parcelable.
