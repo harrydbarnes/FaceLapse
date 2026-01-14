@@ -10,9 +10,10 @@
 }
 
 # ML Kit Face Detection rules
--keep public class com.google.mlkit.vision.face.** { *; }
--keep public class com.google.mlkit.vision.common.** { *; }
+# Optimized to keep only necessary classes for shrinking
+-keep public class com.google.mlkit.vision.face.* { *; }
+-keep public class com.google.mlkit.vision.common.InputImage { *; }
 
-# Keep data model classes (e.g., Room entities) from being obfuscated.
-# This is a safeguard against issues with reflection, serialization, or Parcelable.
--keep class com.facelapse.app.data.local.entity.** { *; }
+# Keep Room entities based on annotation.
+# This ensures data model classes are preserved regardless of package.
+-keep @androidx.room.Entity class * { *; }
