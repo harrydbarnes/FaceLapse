@@ -2,6 +2,7 @@ package com.facelapse.app.ui.project
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.PointF
 import android.net.Uri
 import androidx.core.content.FileProvider
 import androidx.lifecycle.SavedStateHandle
@@ -11,10 +12,12 @@ import com.facelapse.app.data.local.entity.PhotoEntity
 import com.facelapse.app.data.local.entity.ProjectEntity
 import com.facelapse.app.data.repository.ProjectRepository
 import com.facelapse.app.data.repository.SettingsRepository
+import com.facelapse.app.domain.FaceDetectionResult
 import com.facelapse.app.domain.FaceDetectorHelper
 import com.facelapse.app.domain.VideoGenerator
 import com.google.mlkit.vision.face.Face
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlin.math.hypot
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -135,7 +138,7 @@ class ProjectViewModel @Inject constructor(
 
     // Helper for UI to get faces for a specific photo on demand
     suspend fun getFacesForPhoto(photo: PhotoEntity): List<Face> {
-        return faceDetectorHelper.detectFaces(Uri.parse(photo.originalUri))
+        return faceDetectorHelper.detectFaces(Uri.parse(photo.originalUri)).faces
     }
 
     fun updateFaceSelection(photo: PhotoEntity, face: Face) {
@@ -154,14 +157,51 @@ class ProjectViewModel @Inject constructor(
     fun processFaces() {
         viewModelScope.launch {
             _isProcessing.value = true
-            val currentPhotos = repository.getPhotosList(projectId)
-            currentPhotos.forEach { photo ->
-                if (!photo.isProcessed) {
-                    // Get ALL faces
-                    val faces = faceDetectorHelper.detectFaces(Uri.parse(photo.originalUri))
+            val currentPhotos = repository.getPhotosList(projectId).sortedBy { it.sortOrder }
 
-                    // Default to largest face initially
-                    val bestFace = faces.maxByOrNull { it.boundingBox.width() * it.boundingBox.height() }
+            var previousFaceCenter: PointF? = null
+
+            currentPhotos.forEach { photo ->
+                val result = faceDetectorHelper.detectFaces(Uri.parse(photo.originalUri))
+                val faces = result.faces
+                val width = result.width
+                val height = result.height
+
+                if (width == 0 || height == 0) {
+                    repository.updatePhoto(photo.copy(isProcessed = true))
+                    return@forEach
+                }
+
+                if (photo.isProcessed) {
+                    val fx = photo.faceX
+                    val fy = photo.faceY
+                    val fw = photo.faceWidth
+                    val fh = photo.faceHeight
+
+                    previousFaceCenter = if (fx != null && fy != null && fw != null && fh != null) {
+                        calculateNormalizedCenter(fx, fy, fw, fh, width, height)
+                    } else {
+                        null
+                    }
+                } else {
+                    val bestFace = if (previousFaceCenter == null) {
+                        // First frame or lost track: Largest face
+                        faces.maxByOrNull { it.boundingBox.width() * it.boundingBox.height() }
+                    } else {
+                        val prevCenter = checkNotNull(previousFaceCenter)
+                        // Find closest to previous center
+                        faces.minByOrNull { face ->
+                            val center = calculateNormalizedCenter(
+                                face.boundingBox.left.toFloat(),
+                                face.boundingBox.top.toFloat(),
+                                face.boundingBox.width().toFloat(),
+                                face.boundingBox.height().toFloat(),
+                                width,
+                                height
+                            )
+                            hypot(center.x - prevCenter.x, center.y - prevCenter.y)
+                        }
+                    }
 
                     if (bestFace != null) {
                         val updatedPhoto = photo.copy(
@@ -172,14 +212,36 @@ class ProjectViewModel @Inject constructor(
                             faceHeight = bestFace.boundingBox.height().toFloat()
                         )
                         repository.updatePhoto(updatedPhoto)
+
+                        // Update reference
+                        previousFaceCenter = calculateNormalizedCenter(
+                            bestFace.boundingBox.left.toFloat(),
+                            bestFace.boundingBox.top.toFloat(),
+                            bestFace.boundingBox.width().toFloat(),
+                            bestFace.boundingBox.height().toFloat(),
+                            width,
+                            height
+                        )
                     } else {
-                         // Mark processed to stop auto-retry
-                         repository.updatePhoto(photo.copy(isProcessed = true))
+                        repository.updatePhoto(photo.copy(isProcessed = true))
                     }
                 }
             }
             _isProcessing.value = false
         }
+    }
+
+    private fun calculateNormalizedCenter(
+        x: Float,
+        y: Float,
+        w: Float,
+        h: Float,
+        imageWidth: Int,
+        imageHeight: Int
+    ): PointF {
+        val centerX = x + w / 2f
+        val centerY = y + h / 2f
+        return PointF(centerX / imageWidth, centerY / imageHeight)
     }
 
     fun updateProjectSettings(fps: Float, exportAsGif: Boolean, isDateOverlayEnabled: Boolean) {
