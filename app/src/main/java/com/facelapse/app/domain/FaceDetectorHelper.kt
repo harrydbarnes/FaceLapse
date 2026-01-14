@@ -48,9 +48,3 @@ class FaceDetectorHelper @Inject constructor(
         }
     }
 }
-
-data class FaceDetectionResult(
-    val faces: List<Face>,
-    val width: Int,
-    val height: Int
-)

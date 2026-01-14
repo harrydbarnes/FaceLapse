@@ -167,7 +167,10 @@ class ProjectViewModel @Inject constructor(
                 val width = result.width
                 val height = result.height
 
-                if (width == 0 || height == 0) return@forEach
+                if (width == 0 || height == 0) {
+                    repository.updatePhoto(photo.copy(isProcessed = true))
+                    return@forEach
+                }
 
                 if (photo.isProcessed) {
                     val fx = photo.faceX
@@ -176,7 +179,7 @@ class ProjectViewModel @Inject constructor(
                     val fh = photo.faceHeight
 
                     previousFaceCenter = if (fx != null && fy != null && fw != null && fh != null) {
-                        PointF((fx + fw / 2f) / width, (fy + fh / 2f) / height)
+                        calculateNormalizedCenter(fx, fy, fw, fh, width, height)
                     } else {
                         null
                     }
@@ -185,12 +188,18 @@ class ProjectViewModel @Inject constructor(
                         // First frame or lost track: Largest face
                         faces.maxByOrNull { it.boundingBox.width() * it.boundingBox.height() }
                     } else {
-                        val prevCenter = previousFaceCenter
+                        val prevCenter = checkNotNull(previousFaceCenter)
                         // Find closest to previous center
                         faces.minByOrNull { face ->
-                            val cx = face.boundingBox.centerX().toFloat() / width
-                            val cy = face.boundingBox.centerY().toFloat() / height
-                            hypot(cx - prevCenter.x, cy - prevCenter.y)
+                            val center = calculateNormalizedCenter(
+                                face.boundingBox.left.toFloat(),
+                                face.boundingBox.top.toFloat(),
+                                face.boundingBox.width().toFloat(),
+                                face.boundingBox.height().toFloat(),
+                                width,
+                                height
+                            )
+                            hypot(center.x - prevCenter.x, center.y - prevCenter.y)
                         }
                     }
 
@@ -205,9 +214,14 @@ class ProjectViewModel @Inject constructor(
                         repository.updatePhoto(updatedPhoto)
 
                         // Update reference
-                        val cx = bestFace.boundingBox.centerX().toFloat() / width
-                        val cy = bestFace.boundingBox.centerY().toFloat() / height
-                        previousFaceCenter = PointF(cx, cy)
+                        previousFaceCenter = calculateNormalizedCenter(
+                            bestFace.boundingBox.left.toFloat(),
+                            bestFace.boundingBox.top.toFloat(),
+                            bestFace.boundingBox.width().toFloat(),
+                            bestFace.boundingBox.height().toFloat(),
+                            width,
+                            height
+                        )
                     } else {
                         repository.updatePhoto(photo.copy(isProcessed = true))
                     }
@@ -215,6 +229,19 @@ class ProjectViewModel @Inject constructor(
             }
             _isProcessing.value = false
         }
+    }
+
+    private fun calculateNormalizedCenter(
+        x: Float,
+        y: Float,
+        w: Float,
+        h: Float,
+        imageWidth: Int,
+        imageHeight: Int
+    ): PointF {
+        val centerX = x + w / 2f
+        val centerY = y + h / 2f
+        return PointF(centerX / imageWidth, centerY / imageHeight)
     }
 
     fun updateProjectSettings(fps: Float, exportAsGif: Boolean, isDateOverlayEnabled: Boolean) {
