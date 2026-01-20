@@ -28,7 +28,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImagePainter
 import coil.compose.rememberAsyncImagePainter
-import com.facelapse.app.data.local.entity.PhotoEntity
+import com.facelapse.app.domain.model.Photo
 import com.google.mlkit.vision.face.Face
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -81,7 +81,6 @@ fun FaceAuditScreen(
                     state = pagerState,
                     modifier = Modifier.weight(1f)
                 ) { page ->
-                    // Guard against potential index out of bounds if photos list changes rapidly
                     if (page < photos.size) {
                         FaceAuditItem(
                             photo = photos[page],
@@ -90,7 +89,6 @@ fun FaceAuditScreen(
                     }
                 }
 
-                // Bottom Controls / Indicators
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -127,17 +125,12 @@ fun FaceAuditScreen(
 
 @Composable
 fun FaceAuditItem(
-    photo: PhotoEntity,
+    photo: Photo,
     viewModel: ProjectViewModel
 ) {
     var detectedFaces by remember { mutableStateOf<List<Face>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var containerSize by remember { mutableStateOf(IntSize.Zero) }
-
-    // We use the photo's stored face data to determine the "selected" face initially.
-    // Unlike the dialog, we update immediately upon selection here for efficiency,
-    // or we could optimistically update UI.
-    // Let's stick to the pattern: Load -> Select -> Update DB.
 
     LaunchedEffect(photo.id) {
         isLoading = true
@@ -145,10 +138,12 @@ fun FaceAuditItem(
         isLoading = false
     }
 
-    // Determine currently selected face based on DB values
     val currentSelectedFace = remember(detectedFaces, photo) {
         findMatchingFace(detectedFaces, photo)
     }
+
+    val highlightColor = MaterialTheme.colorScheme.tertiary
+    val outlineColor = MaterialTheme.colorScheme.outline
 
     Box(
         modifier = Modifier
@@ -173,14 +168,12 @@ fun FaceAuditItem(
                 val (imgW, imgH) = intrinsicSize
                 val (viewW, viewH) = containerSize.width.toFloat() to containerSize.height.toFloat()
 
-                // Calculate ContentScale.Fit logic
                 val scale = min(viewW / imgW, viewH / imgH)
                 val displayedW = imgW * scale
                 val displayedH = imgH * scale
                 val offsetX = (viewW - displayedW) / 2
                 val offsetY = (viewH - displayedH) / 2
 
-                // Map Faces
                 val mappedFaces = detectedFaces.map { face ->
                     val rect = face.boundingBox
                     val mappedRect = Rect(
@@ -208,12 +201,9 @@ fun FaceAuditItem(
                         }
                 ) {
                     mappedFaces.forEach { (face, rect) ->
-                        val isSelected = face == currentSelectedFace // Compare by ref or ID? Face doesn't have ID stable.
-                        // Actually `currentSelectedFace` is derived from `findMatchingFace` which compares coords.
-                        // So `face == currentSelectedFace` works if `findMatchingFace` returns one of the instances in `detectedFaces`.
-                        // Yes, `findMatchingFace` returns an element from `detectedFaces`.
+                        val isSelected = face == currentSelectedFace
 
-                        val strokeColor = if (isSelected) Color.Green else Color.White
+                        val strokeColor = if (isSelected) highlightColor else outlineColor
                         val strokeWidth = if (isSelected) 6.dp.toPx() else 3.dp.toPx()
 
                         drawRect(
@@ -222,13 +212,10 @@ fun FaceAuditItem(
                             size = rect.size,
                             style = Stroke(width = strokeWidth)
                         )
-
-                        // Draw label or number if needed?
                     }
                 }
             }
 
-            // If no faces detected
             if (!isLoading && detectedFaces.isEmpty()) {
                  Box(
                     modifier = Modifier

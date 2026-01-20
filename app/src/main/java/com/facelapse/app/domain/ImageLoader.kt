@@ -9,6 +9,7 @@ import androidx.exifinterface.media.ExifInterface
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.io.FileOutputStream
+import java.io.InputStream
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -25,23 +26,38 @@ class ImageLoader @Inject constructor(
         return loadOptimizedBitmap(uri)?.bitmap
     }
 
-    fun loadOptimizedBitmap(uri: Uri, reqWidth: Int? = null, reqHeight: Int? = null): LoadedBitmap? {
-        val tempFile = try {
-            File.createTempFile("image_load_", ".tmp", context.cacheDir)
-        } catch (e: Exception) {
-            Log.e("ImageLoader", "Failed to create temp file", e)
-            return null
-        }
-
+    fun getDimensions(uri: Uri): Pair<Int, Int>? {
         return try {
-            // Copy URI content to temp file to avoid opening multiple input streams
-            // (crucial for cloud-backed URIs)
+            val options = BitmapFactory.Options()
+            options.inJustDecodeBounds = true
+
             context.contentResolver.openInputStream(uri)?.use { input ->
-                FileOutputStream(tempFile).use { output ->
-                    input.copyTo(output)
-                }
+                BitmapFactory.decodeStream(input, null, options)
             } ?: return null
 
+            var rotation = 0
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                 rotation = getRotationFromStream(input)
+            }
+
+            val w = options.outWidth
+            val h = options.outHeight
+
+            if (rotation == 90 || rotation == 270) {
+                 h to w
+            } else {
+                 w to h
+            }
+        } catch (e: Exception) {
+             Log.e("ImageLoader", "Error getting dimensions", e)
+             null
+        }
+    }
+
+    fun loadOptimizedBitmap(uri: Uri, reqWidth: Int? = null, reqHeight: Int? = null): LoadedBitmap? {
+        val tempFile = copyToTemp(uri) ?: return null
+
+        return try {
             val rotationInDegrees = getRotation(tempFile)
 
             val options = BitmapFactory.Options()
@@ -94,10 +110,48 @@ class ImageLoader @Inject constructor(
         }
     }
 
+    private fun copyToTemp(uri: Uri): File? {
+        val tempFile = try {
+            File.createTempFile("image_load_", ".tmp", context.cacheDir)
+        } catch (e: Exception) {
+            Log.e("ImageLoader", "Failed to create temp file", e)
+            return null
+        }
+        return try {
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                FileOutputStream(tempFile).use { output ->
+                    input.copyTo(output)
+                }
+            } ?: return null
+            tempFile
+        } catch (e: Exception) {
+             if (tempFile.exists()) tempFile.delete()
+             null
+        }
+    }
+
     private fun getRotation(file: File): Int {
         return try {
             val exifInterface = ExifInterface(file.absolutePath)
-            when (exifInterface.getAttributeInt(
+            getRotationFromExif(exifInterface)
+        } catch (e: Exception) {
+            Log.w("ImageLoader", "Could not read EXIF data from file: ${file.absolutePath}", e)
+            0
+        }
+    }
+
+    private fun getRotationFromStream(input: InputStream): Int {
+        return try {
+            val exifInterface = ExifInterface(input)
+            getRotationFromExif(exifInterface)
+        } catch (e: Exception) {
+            Log.w("ImageLoader", "Could not read EXIF data from stream", e)
+            0
+        }
+    }
+
+    private fun getRotationFromExif(exifInterface: ExifInterface): Int {
+         return when (exifInterface.getAttributeInt(
                 ExifInterface.TAG_ORIENTATION,
                 ExifInterface.ORIENTATION_NORMAL
             )) {
@@ -106,10 +160,6 @@ class ImageLoader @Inject constructor(
                 ExifInterface.ORIENTATION_ROTATE_270 -> 270
                 else -> 0
             }
-        } catch (e: Exception) {
-            Log.w("ImageLoader", "Could not read EXIF data from file: ${file.absolutePath}", e)
-            0
-        }
     }
 
     private fun calculateInSampleSize(width: Int, height: Int, reqWidth: Int, reqHeight: Int): Int {

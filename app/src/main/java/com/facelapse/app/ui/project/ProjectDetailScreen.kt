@@ -3,6 +3,9 @@ package com.facelapse.app.ui.project
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.Canvas
@@ -16,9 +19,9 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
@@ -56,20 +59,22 @@ import coil.request.ImageRequest
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import com.facelapse.app.R
-import com.facelapse.app.data.local.entity.PhotoEntity
-import com.facelapse.app.data.local.entity.ProjectEntity
+import com.facelapse.app.domain.model.Photo
+import com.facelapse.app.domain.model.Project
 import com.google.mlkit.vision.face.Face
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.min
 import java.text.DecimalFormat
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun ProjectDetailScreen(
     viewModel: ProjectViewModel,
     onBackClick: () -> Unit,
-    onNavigateToFaceAudit: (String) -> Unit = {}
+    onNavigateToFaceAudit: (String) -> Unit = {},
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val project by viewModel.project.collectAsState(initial = null)
     val photos by viewModel.photos.collectAsState(initial = emptyList())
@@ -92,7 +97,7 @@ fun ProjectDetailScreen(
     var showRenameDialog by remember { mutableStateOf(false) }
 
     // State for Face Selection Dialog
-    var selectedPhotoForEditing by remember { mutableStateOf<PhotoEntity?>(null) }
+    var selectedPhotoForEditing by remember { mutableStateOf<Photo?>(null) }
 
     // Logic for Floating Button: Show "Detect" if photos exist but none are processed
     val showDetectFab = photos.isNotEmpty() && photos.none { it.isProcessed }
@@ -114,11 +119,22 @@ fun ProjectDetailScreen(
                     }
                 )
             } else {
+                val titleModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && project != null) {
+                    with(sharedTransitionScope) {
+                         Modifier.sharedElement(
+                             state = rememberSharedContentState(key = "project-title-${project!!.id}"),
+                             animatedVisibilityScope = animatedVisibilityScope
+                         )
+                    }
+                } else Modifier
+
                 TopAppBar(
                     title = {
                         Text(
                             text = project?.name ?: "Project",
-                            modifier = Modifier.clickable { showRenameDialog = true }
+                            modifier = Modifier
+                                .clickable { showRenameDialog = true }
+                                .then(titleModifier)
                         )
                     },
                     navigationIcon = {
@@ -201,11 +217,11 @@ fun ProjectDetailScreen(
             if (photos.isEmpty()) {
                 EmptyPhotosState(modifier = Modifier.fillMaxSize())
             } else {
-                LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = 120.dp),
+                LazyVerticalStaggeredGrid(
+                    columns = StaggeredGridCells.Adaptive(minSize = 120.dp),
                     contentPadding = PaddingValues(4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalItemSpacing = 4.dp,
+                    verticalItemSpacing = 4.dp
                 ) {
                     itemsIndexed(photos, key = { _, photo -> photo.id }) { index, photo ->
                         val isSelected = selectedPhotoIds.contains(photo.id)
@@ -307,7 +323,7 @@ private fun ActionTooltip(
 
 @Composable
 fun ProjectSettingsDialog(
-    project: ProjectEntity,
+    project: Project,
     onDismiss: () -> Unit,
     onSave: (Float, Boolean, Boolean) -> Unit,
     onExport: (Float, Boolean, Boolean) -> Unit
@@ -568,7 +584,7 @@ private fun EmptyPhotosState(modifier: Modifier = Modifier) {
 
 @Composable
 fun FaceSelectionDialog(
-    photo: PhotoEntity,
+    photo: Photo,
     viewModel: ProjectViewModel,
     onDismiss: () -> Unit
 ) {
@@ -767,7 +783,7 @@ fun FaceSelectionDialog(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PhotoItem(
-    photo: PhotoEntity,
+    photo: Photo,
     isFirst: Boolean,
     isLast: Boolean,
     isSelected: Boolean,

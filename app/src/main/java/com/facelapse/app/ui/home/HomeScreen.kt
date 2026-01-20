@@ -1,19 +1,20 @@
 package com.facelapse.app.ui.home
 
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -53,25 +54,25 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-
 import com.facelapse.app.R
-import com.facelapse.app.data.local.entity.ProjectEntity
-import java.text.SimpleDateFormat
-import java.util.Date
+import com.facelapse.app.domain.model.Project
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private val defaultProjectNameFormatter = java.time.format.DateTimeFormatter.ofPattern("MMM dd, yyyy", Locale.getDefault())
+private val defaultProjectNameFormatter = DateTimeFormatter.ofPattern("MMM dd, yyyy", Locale.getDefault())
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel(),
     onProjectClick: (String) -> Unit,
-    onSettingsClick: () -> Unit
+    onSettingsClick: () -> Unit,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val projects by viewModel.projects.collectAsState(initial = emptyList())
     var showCreateDialog by remember { mutableStateOf(false) }
-    var projectToDelete by remember { mutableStateOf<ProjectEntity?>(null) }
+    var projectToDelete by remember { mutableStateOf<Project?>(null) }
 
     Scaffold(
         topBar = {
@@ -136,7 +137,12 @@ fun HomeScreen(
                     },
                     enableDismissFromStartToEnd = false
                 ) {
-                    ProjectItem(project = project, onClick = { onProjectClick(project.id) })
+                    ProjectItem(
+                        project = project,
+                        onClick = { onProjectClick(project.id) },
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope
+                    )
                 }
             }
             if (projects.isEmpty()) {
@@ -182,8 +188,14 @@ fun HomeScreen(
     }
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-fun ProjectItem(project: ProjectEntity, onClick: () -> Unit) {
+fun ProjectItem(
+    project: Project,
+    onClick: () -> Unit,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -193,15 +205,25 @@ fun ProjectItem(project: ProjectEntity, onClick: () -> Unit) {
         Column(
             modifier = Modifier.padding(16.dp)
         ) {
+            val titleModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                with(sharedTransitionScope) {
+                    Modifier.sharedElement(
+                        state = rememberSharedContentState(key = "project-title-${project.id}"),
+                        animatedVisibilityScope = animatedVisibilityScope
+                    )
+                }
+            } else Modifier
+
             Text(
                 text = project.name,
                 style = MaterialTheme.typography.titleLarge,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                modifier = titleModifier
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Created: ${SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date(project.createdAt))}",
+                text = "Created: ${project.createdAt.format(defaultProjectNameFormatter)}",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

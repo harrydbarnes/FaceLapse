@@ -8,27 +8,32 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.facelapse.app.data.local.entity.PhotoEntity
-import com.facelapse.app.data.local.entity.ProjectEntity
 import com.facelapse.app.data.repository.ProjectRepository
 import com.facelapse.app.data.repository.SettingsRepository
 import com.facelapse.app.domain.FaceDetectionResult
 import com.facelapse.app.domain.FaceDetectorHelper
 import com.facelapse.app.domain.VideoGenerator
+import com.facelapse.app.domain.model.Photo
+import com.facelapse.app.domain.model.Project
 import com.google.mlkit.vision.face.Face
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlin.math.hypot
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import java.util.UUID
 import javax.inject.Inject
 
@@ -42,20 +47,32 @@ class ProjectViewModel @Inject constructor(
 ) : ViewModel() {
 
     companion object {
-        private val timestampFormatter = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")
+        private val filenameTimestampFormatter = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")
         private val SAFE_FILENAME_REGEX = Regex("[^a-zA-Z0-9.-]")
     }
 
-    private val projectId: String = checkNotNull(savedStateHandle["projectId"])
+    private val _projectId = MutableStateFlow<String?>(savedStateHandle["projectId"])
 
-    val project: StateFlow<ProjectEntity?> = repository.getProjectFlow(projectId)
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000L),
-            initialValue = null
-        )
+    private val projectId: String
+        get() = _projectId.value ?: throw IllegalStateException("Project ID not set")
 
-    val photos = repository.getPhotosForProject(projectId)
+    fun setProjectId(id: String) {
+        _projectId.value = id
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val project: StateFlow<Project?> = _projectId.flatMapLatest { id ->
+        if (id == null) flowOf(null) else repository.getProjectFlow(id).map { it?.toDomain() }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000L),
+        initialValue = null
+    )
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val photos: Flow<List<Photo>> = _projectId.flatMapLatest { id ->
+        if (id == null) flowOf(emptyList()) else repository.getPhotosForProject(id)
+    }
 
     private val _selectedPhotoIds = MutableStateFlow<Set<String>>(emptySet())
     val selectedPhotoIds = _selectedPhotoIds.asStateFlow()
@@ -102,20 +119,28 @@ class ProjectViewModel @Inject constructor(
 
     fun addPhotos(uris: List<Uri>) {
         viewModelScope.launch {
-            val currentCount = repository.getPhotosList(projectId).size
+            val pid = projectId
+            val currentCount = repository.getPhotosList(pid).size
             val newPhotos = uris.mapIndexed { index, uri ->
-                PhotoEntity(
-                    projectId = projectId,
+                Photo(
+                    id = UUID.randomUUID().toString(),
+                    projectId = pid,
                     originalUri = uri.toString(),
-                    timestamp = System.currentTimeMillis(),
-                    sortOrder = currentCount + index
+                    timestamp = LocalDateTime.now(),
+                    sortOrder = currentCount + index,
+                    isProcessed = false,
+                    faceX = null,
+                    faceY = null,
+                    faceWidth = null,
+                    faceHeight = null,
+                    rotation = 0
                 )
             }
             repository.addPhotos(newPhotos)
         }
     }
 
-    fun movePhoto(photo: PhotoEntity, moveUp: Boolean) {
+    fun movePhoto(photo: Photo, moveUp: Boolean) {
         viewModelScope.launch {
             val currentPhotos = repository.getPhotosList(projectId).toMutableList()
             val index = currentPhotos.indexOfFirst { it.id == photo.id }
@@ -136,12 +161,11 @@ class ProjectViewModel @Inject constructor(
         }
     }
 
-    // Helper for UI to get faces for a specific photo on demand
-    suspend fun getFacesForPhoto(photo: PhotoEntity): List<Face> {
+    suspend fun getFacesForPhoto(photo: Photo): List<Face> {
         return faceDetectorHelper.detectFaces(Uri.parse(photo.originalUri)).faces
     }
 
-    fun updateFaceSelection(photo: PhotoEntity, face: Face) {
+    fun updateFaceSelection(photo: Photo, face: Face) {
         viewModelScope.launch {
             val updatedPhoto = photo.copy(
                 isProcessed = true,
@@ -185,11 +209,9 @@ class ProjectViewModel @Inject constructor(
                     }
                 } else {
                     val bestFace = if (previousFaceCenter == null) {
-                        // First frame or lost track: Largest face
                         faces.maxByOrNull { it.boundingBox.width() * it.boundingBox.height() }
                     } else {
                         val prevCenter = checkNotNull(previousFaceCenter)
-                        // Find closest to previous center
                         faces.minByOrNull { face ->
                             val center = calculateNormalizedCenter(
                                 face.boundingBox.left.toFloat(),
@@ -213,7 +235,6 @@ class ProjectViewModel @Inject constructor(
                         )
                         repository.updatePhoto(updatedPhoto)
 
-                        // Update reference
                         previousFaceCenter = calculateNormalizedCenter(
                             bestFace.boundingBox.left.toFloat(),
                             bestFace.boundingBox.top.toFloat(),
@@ -250,29 +271,23 @@ class ProjectViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Atomically saves settings and then triggers export to prevent race conditions where
-     * the export uses stale settings.
-     */
     fun saveAndExport(context: Context, fps: Float, exportAsGif: Boolean, isDateOverlayEnabled: Boolean) {
         viewModelScope.launch {
             _isGenerating.value = true
             try {
                 val updatedProject = updateProjectInternal(fps, exportAsGif, isDateOverlayEnabled)
                 if (updatedProject != null) {
-                    // exportVideoInternal will set _isGenerating to false in its own finally block.
                     exportVideoInternal(context, updatedProject)
                 } else {
                     _isGenerating.value = false
                 }
             } catch (e: Exception) {
-                // Ensure loading state is reset on any failure.
                 _isGenerating.value = false
             }
         }
     }
 
-    private suspend fun updateProjectInternal(fps: Float, exportAsGif: Boolean, isDateOverlayEnabled: Boolean): ProjectEntity? {
+    private suspend fun updateProjectInternal(fps: Float, exportAsGif: Boolean, isDateOverlayEnabled: Boolean): Project? {
         val currentProject = repository.getProject(projectId) ?: return null
         val updatedProject = currentProject.copy(
             fps = fps,
@@ -287,9 +302,9 @@ class ProjectViewModel @Inject constructor(
         viewModelScope.launch {
             _isGenerating.value = true
             try {
-                val projectEntity = project.value
-                if (projectEntity != null) {
-                    exportVideoInternal(context, projectEntity)
+                val projectVal = project.value
+                if (projectVal != null) {
+                    exportVideoInternal(context, projectVal)
                 } else {
                     _isGenerating.value = false
                 }
@@ -299,18 +314,15 @@ class ProjectViewModel @Inject constructor(
         }
     }
 
-    private suspend fun exportVideoInternal(context: Context, projectEntity: ProjectEntity) {
+    private suspend fun exportVideoInternal(context: Context, project: Project) {
         _isGenerating.value = true
         try {
             val currentPhotos = repository.getPhotosList(projectId)
 
-            val safeName = projectEntity.name.replace(SAFE_FILENAME_REGEX, "_")
-            val timestamp = timestampFormatter.format(java.time.LocalDateTime.now())
+            val safeName = project.name.replace(SAFE_FILENAME_REGEX, "_")
+            val timestamp = LocalDateTime.now().format(filenameTimestampFormatter)
 
-            // Use project specific setting for on/off
-            val isDateOverlayEnabled = projectEntity.isDateOverlayEnabled
-
-            // Use global settings for styling
+            val isDateOverlayEnabled = project.isDateOverlayEnabled
             val dateFontSize = settingsRepository.dateFontSize.first()
             val dateFormat = settingsRepository.dateFormat.first()
 
@@ -318,7 +330,7 @@ class ProjectViewModel @Inject constructor(
             val mimeType: String
             val generator: suspend (File) -> Boolean
 
-            if (projectEntity.exportAsGif) {
+            if (project.exportAsGif) {
                 extension = "gif"
                 mimeType = "image/gif"
                 generator = { file ->
@@ -328,7 +340,7 @@ class ProjectViewModel @Inject constructor(
                         isDateOverlayEnabled = isDateOverlayEnabled,
                         dateFontSize = dateFontSize,
                         dateFormat = dateFormat,
-                        fps = projectEntity.fps
+                        fps = project.fps
                     )
                 }
             } else {
@@ -341,7 +353,7 @@ class ProjectViewModel @Inject constructor(
                         isDateOverlayEnabled = isDateOverlayEnabled,
                         dateFontSize = dateFontSize,
                         dateFormat = dateFormat,
-                        fps = projectEntity.fps
+                        fps = project.fps
                     )
                 }
             }
@@ -369,10 +381,9 @@ class ProjectViewModel @Inject constructor(
         context.startActivity(chooser)
     }
 
-    fun deletePhoto(photo: PhotoEntity) {
+    fun deletePhoto(photo: Photo) {
         viewModelScope.launch {
             repository.deletePhoto(photo)
         }
     }
-
 }

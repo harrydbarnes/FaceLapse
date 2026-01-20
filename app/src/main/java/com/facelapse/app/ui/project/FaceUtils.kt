@@ -1,10 +1,10 @@
 package com.facelapse.app.ui.project
 
-import com.facelapse.app.data.local.entity.PhotoEntity
+import com.facelapse.app.domain.model.Photo
 import com.google.mlkit.vision.face.Face
 import kotlin.math.abs
 
-fun findMatchingFace(faces: List<Face>, photo: PhotoEntity): Face? {
+fun findMatchingFace(faces: List<Face>, photo: Photo): Face? {
     val epsilon = 1.0f
     return faces.find { face ->
         val box = face.boundingBox
