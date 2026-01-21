@@ -26,7 +26,7 @@ class ProjectRepository @Inject constructor(
         .map { it?.toDomain() }
 
     suspend fun createProject(name: String, fps: Float, exportAsGif: Boolean) {
-        projectDao.insertProject(ProjectEntity(name = name, fps = fps, exportAsGif = exportAsGif))
+        projectDao.insertProject(Project(name = name, fps = fps, exportAsGif = exportAsGif).toEntity())
     }
 
     suspend fun updateProject(project: Project) {
