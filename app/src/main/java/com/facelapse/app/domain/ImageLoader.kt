@@ -150,19 +150,19 @@ class ImageLoader @Inject constructor(
         }
     }
 
-    private fun copyToTemp(uri: Uri): File? {
+    private suspend fun copyToTemp(uri: Uri): File? = withContext(Dispatchers.IO) {
         val tempFile = try {
             File.createTempFile("image_load_", ".tmp", context.cacheDir)
         } catch (e: Exception) {
             Log.e("ImageLoader", "Failed to create temp file", e)
-            return null
+            return@withContext null
         }
-        return try {
+        try {
             context.contentResolver.openInputStream(uri)?.use { input ->
                 FileOutputStream(tempFile).use { output ->
                     input.copyTo(output)
                 }
-            } ?: return null
+            } ?: return@withContext null
             tempFile
         } catch (e: Exception) {
              Log.e("ImageLoader", "Failed to copy content to temp file: $uri", e)
