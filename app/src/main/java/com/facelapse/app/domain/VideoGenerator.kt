@@ -77,7 +77,7 @@ class VideoGenerator @Inject constructor(
             var centerY = h / 2f
 
             if (photo.faceX != null && photo.faceWidth != null) {
-                val fh = photo.faceHeight ?: photo.faceWidth
+                val fh = photo.faceHeight ?: photo.faceWidth ?: 0f
                 centerX = photo.faceX + photo.faceWidth / 2f
                 centerY = (photo.faceY ?: 0f) + fh / 2f
             }
