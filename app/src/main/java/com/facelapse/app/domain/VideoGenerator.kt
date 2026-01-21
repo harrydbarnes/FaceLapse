@@ -24,6 +24,8 @@ import androidx.media3.transformer.Transformer
 import com.facelapse.app.domain.model.Photo
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -60,6 +62,9 @@ class VideoGenerator @Inject constructor(
         } else null
 
         val editedMediaItems = photos.mapNotNull { photo ->
+            // Ensure coroutine is active during preparation
+            currentCoroutineContext().ensureActive()
+
             val dims = imageLoader.getDimensions(Uri.parse(photo.originalUri)) ?: return@mapNotNull null
             val (w, h) = dims
 
@@ -182,6 +187,8 @@ class VideoGenerator @Inject constructor(
                     } else null
 
                     for (photo in photos) {
+                        currentCoroutineContext().ensureActive()
+
                         val successLoad = loadBitmapToCanvas(
                             Uri.parse(photo.originalUri),
                             frameBuffer,

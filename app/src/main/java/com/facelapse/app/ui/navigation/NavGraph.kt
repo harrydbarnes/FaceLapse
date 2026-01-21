@@ -12,12 +12,14 @@ import androidx.compose.material3.adaptive.layout.ListDetailPaneScaffoldRole
 import androidx.compose.material3.adaptive.navigation.rememberListDetailPaneScaffoldNavigator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
-import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import androidx.navigation.navArgument
 import com.facelapse.app.ui.home.HomeScreen
 import com.facelapse.app.ui.home.HomeViewModel
 import com.facelapse.app.ui.project.FaceAuditScreen
@@ -34,24 +36,12 @@ fun FaceLapseNavGraph(navController: NavHostController) {
                 HomeAdaptiveRoute(
                     sharedTransitionScope = this@SharedTransitionLayout,
                     animatedVisibilityScope = this@composable,
-                    onNavigateToSettings = { navController.navigate(Screen.Settings.route) },
-                    onNavigateToFaceAudit = { projectId -> navController.navigate("face_audit/$projectId") }
+                    onNavigateToSettings = { navController.navigate(Screen.Settings.route) }
                 )
             }
 
             composable(Screen.Settings.route) {
                 SettingsScreen(
-                    onBackClick = { navController.popBackStack() }
-                )
-            }
-
-            composable(
-                route = "face_audit/{projectId}",
-                arguments = listOf(navArgument("projectId") { type = NavType.StringType })
-            ) { backStackEntry ->
-                val viewModel: ProjectViewModel = hiltViewModel()
-                FaceAuditScreen(
-                    viewModel = viewModel,
                     onBackClick = { navController.popBackStack() }
                 )
             }
@@ -64,12 +54,22 @@ fun FaceLapseNavGraph(navController: NavHostController) {
 fun HomeAdaptiveRoute(
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
-    onNavigateToSettings: () -> Unit,
-    onNavigateToFaceAudit: (String) -> Unit
+    onNavigateToSettings: () -> Unit
 ) {
     val navigator = rememberListDetailPaneScaffoldNavigator<String>()
 
-    BackHandler(navigator.canNavigateBack()) {
+    // State to track if Face Audit is active within the Detail pane
+    var isFaceAuditActive by remember { mutableStateOf(false) }
+
+    // If Face Audit is active, back press should return to Project Detail (exit audit mode)
+    // If not, back press should follow navigator logic (e.g. Detail -> List)
+    BackHandler(enabled = isFaceAuditActive) {
+        isFaceAuditActive = false
+    }
+
+    // Only enable navigator back handler if Face Audit is NOT active
+    // This ensures we don't pop the detail pane entirely when just trying to exit Face Audit
+    BackHandler(enabled = !isFaceAuditActive && navigator.canNavigateBack()) {
         navigator.navigateBack()
     }
 
@@ -82,11 +82,13 @@ fun HomeAdaptiveRoute(
                 HomeScreen(
                     viewModel = homeViewModel,
                     onProjectClick = { projectId ->
+                        // Reset audit mode when selecting a project
+                        isFaceAuditActive = false
                         navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, projectId)
                     },
                     onSettingsClick = onNavigateToSettings,
                     sharedTransitionScope = sharedTransitionScope,
-                    animatedVisibilityScope = this
+                    animatedVisibilityScope = animatedVisibilityScope
                 )
             }
         },
@@ -94,18 +96,28 @@ fun HomeAdaptiveRoute(
             AnimatedPane {
                 val projectId = navigator.currentDestination?.content
                 if (projectId != null) {
-                    val projectViewModel: ProjectViewModel = hiltViewModel()
+                    // Use projectId as key to ensure we get a ViewModel instance scoped to the current project selection
+                    // This allows sharing the same instance between Detail and Audit views as long as projectId is constant
+                    val projectViewModel: ProjectViewModel = hiltViewModel(key = projectId)
+
                     LaunchedEffect(projectId) {
                         projectViewModel.setProjectId(projectId)
                     }
 
-                    ProjectDetailScreen(
-                        viewModel = projectViewModel,
-                        onBackClick = { navigator.navigateBack() },
-                        onNavigateToFaceAudit = onNavigateToFaceAudit,
-                        sharedTransitionScope = sharedTransitionScope,
-                        animatedVisibilityScope = this
-                    )
+                    if (isFaceAuditActive) {
+                        FaceAuditScreen(
+                            viewModel = projectViewModel,
+                            onBackClick = { isFaceAuditActive = false }
+                        )
+                    } else {
+                        ProjectDetailScreen(
+                            viewModel = projectViewModel,
+                            onBackClick = { navigator.navigateBack() },
+                            onNavigateToFaceAudit = { isFaceAuditActive = true },
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedVisibilityScope = animatedVisibilityScope
+                        )
+                    }
                 }
             }
         }

@@ -62,7 +62,7 @@ class ProjectViewModel @Inject constructor(
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val project: StateFlow<Project?> = _projectId.flatMapLatest { id ->
-        if (id == null) flowOf(null) else repository.getProjectFlow(id).map { it?.toDomain() }
+        if (id == null) flowOf(null) else repository.getProjectFlow(id)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000L),

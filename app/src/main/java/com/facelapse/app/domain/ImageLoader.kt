@@ -27,30 +27,27 @@ class ImageLoader @Inject constructor(
     }
 
     fun getDimensions(uri: Uri): Pair<Int, Int>? {
+        val tempFile = copyToTemp(uri) ?: return null
         return try {
             val options = BitmapFactory.Options()
             options.inJustDecodeBounds = true
+            BitmapFactory.decodeFile(tempFile.absolutePath, options)
 
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                BitmapFactory.decodeStream(input, null, options)
-            } ?: return null
-
-            var rotation = 0
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                 rotation = getRotationFromStream(input)
-            }
+            val rotation = getRotation(tempFile)
 
             val w = options.outWidth
             val h = options.outHeight
 
             if (rotation == 90 || rotation == 270) {
-                 h to w
+                h to w
             } else {
-                 w to h
+                w to h
             }
         } catch (e: Exception) {
              Log.e("ImageLoader", "Error getting dimensions", e)
              null
+        } finally {
+            if (tempFile.exists()) tempFile.delete()
         }
     }
 
@@ -133,25 +130,7 @@ class ImageLoader @Inject constructor(
     private fun getRotation(file: File): Int {
         return try {
             val exifInterface = ExifInterface(file.absolutePath)
-            getRotationFromExif(exifInterface)
-        } catch (e: Exception) {
-            Log.w("ImageLoader", "Could not read EXIF data from file: ${file.absolutePath}", e)
-            0
-        }
-    }
-
-    private fun getRotationFromStream(input: InputStream): Int {
-        return try {
-            val exifInterface = ExifInterface(input)
-            getRotationFromExif(exifInterface)
-        } catch (e: Exception) {
-            Log.w("ImageLoader", "Could not read EXIF data from stream", e)
-            0
-        }
-    }
-
-    private fun getRotationFromExif(exifInterface: ExifInterface): Int {
-         return when (exifInterface.getAttributeInt(
+            when (exifInterface.getAttributeInt(
                 ExifInterface.TAG_ORIENTATION,
                 ExifInterface.ORIENTATION_NORMAL
             )) {
@@ -160,6 +139,10 @@ class ImageLoader @Inject constructor(
                 ExifInterface.ORIENTATION_ROTATE_270 -> 270
                 else -> 0
             }
+        } catch (e: Exception) {
+            Log.w("ImageLoader", "Could not read EXIF data from file: ${file.absolutePath}", e)
+            0
+        }
     }
 
     private fun calculateInSampleSize(width: Int, height: Int, reqWidth: Int, reqHeight: Int): Int {
