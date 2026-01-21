@@ -61,6 +61,19 @@ class VideoGenerator @Inject constructor(
              }
         } else null
 
+        val datePaint = if (isDateOverlayEnabled) {
+            Paint().apply {
+                color = Color.WHITE
+                textSize = if (dateFontSize > 0) dateFontSize.toFloat() else 60f
+                isAntiAlias = true
+                setShadowLayer(5f, 0f, 0f, Color.BLACK)
+                textAlign = Paint.Align.CENTER
+                alpha = 255
+            }
+        } else null
+
+        val dateBitmapCache = mutableMapOf<String, Bitmap>()
+
         val editedMediaItems = photos.mapNotNull { photo ->
             // Ensure coroutine is active during preparation
             currentCoroutineContext().ensureActive()
@@ -97,8 +110,15 @@ class VideoGenerator @Inject constructor(
             val effects = mutableListOf<Effect>(cropEffect)
             effects.add(Presentation.createForWidthAndHeight(targetWidth, targetHeight, Presentation.LAYOUT_SCALE_TO_FIT))
 
-            if (isDateOverlayEnabled && dateFormatter != null) {
-                 val dateBitmap = createDateBitmap(photo.timestamp, dateFormatter, dateFontSize, targetWidth, targetHeight)
+            if (isDateOverlayEnabled && dateFormatter != null && datePaint != null) {
+                 val dateString = try {
+                     dateFormatter.format(photo.timestamp)
+                 } catch (e: Exception) {
+                     "Error"
+                 }
+                 val dateBitmap = dateBitmapCache.getOrPut(dateString) {
+                     createDateBitmap(dateString, datePaint, targetWidth, targetHeight)
+                 }
                  val overlay = BitmapOverlay.createStaticBitmapOverlay(dateBitmap)
                  effects.add(OverlayEffect(listOf(overlay)))
             }
@@ -218,27 +238,13 @@ class VideoGenerator @Inject constructor(
     }
 
     private fun createDateBitmap(
-        timestamp: LocalDateTime,
-        formatter: DateTimeFormatter,
-        fontSize: Int,
+        dateString: String,
+        paint: Paint,
         width: Int,
         height: Int
     ): Bitmap {
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
-        val paint = Paint().apply {
-            color = Color.WHITE
-            textSize = if (fontSize > 0) fontSize.toFloat() else 60f
-            isAntiAlias = true
-            setShadowLayer(5f, 0f, 0f, Color.BLACK)
-            textAlign = Paint.Align.CENTER
-            alpha = 255
-        }
-        val dateString = try {
-            formatter.format(timestamp)
-        } catch (e: Exception) {
-            "Error"
-        }
         val x = width / 2f
         val y = height - 100f
         canvas.drawText(dateString, x, y, paint)

@@ -220,8 +220,8 @@ fun ProjectDetailScreen(
                 LazyVerticalStaggeredGrid(
                     columns = StaggeredGridCells.Adaptive(minSize = 120.dp),
                     contentPadding = PaddingValues(4.dp),
-                    horizontalItemSpacing = 4.dp,
-                    verticalItemSpacing = 4.dp
+                    verticalItemSpacing = 4.dp,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     itemsIndexed(photos, key = { _, photo -> photo.id }) { index, photo ->
                         val isSelected = selectedPhotoIds.contains(photo.id)

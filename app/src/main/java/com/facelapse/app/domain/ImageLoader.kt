@@ -122,6 +122,7 @@ class ImageLoader @Inject constructor(
             } ?: return null
             tempFile
         } catch (e: Exception) {
+             Log.e("ImageLoader", "Failed to copy content to temp file: $uri", e)
              if (tempFile.exists()) tempFile.delete()
              null
         }
