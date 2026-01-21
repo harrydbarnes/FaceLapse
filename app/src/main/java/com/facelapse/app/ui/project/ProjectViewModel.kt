@@ -209,9 +209,11 @@ class ProjectViewModel @Inject constructor(
                     }
                 } else {
                     val bestFace = if (previousFaceCenter == null) {
+                        // First frame or lost track: Largest face
                         faces.maxByOrNull { it.boundingBox.width() * it.boundingBox.height() }
                     } else {
                         val prevCenter = checkNotNull(previousFaceCenter)
+                        // Find closest to previous center
                         faces.minByOrNull { face ->
                             val center = calculateNormalizedCenter(
                                 face.boundingBox.left.toFloat(),
@@ -271,17 +273,23 @@ class ProjectViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Atomically saves settings and then triggers export to prevent race conditions where
+     * the export uses stale settings.
+     */
     fun saveAndExport(context: Context, fps: Float, exportAsGif: Boolean, isDateOverlayEnabled: Boolean) {
         viewModelScope.launch {
             _isGenerating.value = true
             try {
                 val updatedProject = updateProjectInternal(fps, exportAsGif, isDateOverlayEnabled)
                 if (updatedProject != null) {
+                    // exportVideoInternal will set _isGenerating to false in its own finally block.
                     exportVideoInternal(context, updatedProject)
                 } else {
                     _isGenerating.value = false
                 }
             } catch (e: Exception) {
+                // Ensure loading state is reset on any failure.
                 _isGenerating.value = false
             }
         }

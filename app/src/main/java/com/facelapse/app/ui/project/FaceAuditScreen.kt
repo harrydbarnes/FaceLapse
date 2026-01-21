@@ -138,10 +138,12 @@ fun FaceAuditItem(
         isLoading = false
     }
 
+    // Determine currently selected face based on DB values
     val currentSelectedFace = remember(detectedFaces, photo) {
         findMatchingFace(detectedFaces, photo)
     }
 
+    // Define colors for selected (highlight) vs unselected (outline) faces
     val highlightColor = MaterialTheme.colorScheme.tertiary
     val outlineColor = MaterialTheme.colorScheme.outline
 

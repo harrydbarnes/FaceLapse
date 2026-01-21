@@ -26,7 +26,9 @@ class ProjectRepository @Inject constructor(
         .map { it?.toDomain() }
 
     suspend fun createProject(name: String, fps: Float, exportAsGif: Boolean) {
-        projectDao.insertProject(Project(name = name, fps = fps, exportAsGif = exportAsGif).toEntity())
+        val id = java.util.UUID.randomUUID().toString()
+        val createdAt = java.time.LocalDateTime.now()
+        projectDao.insertProject(Project(id = id, name = name, fps = fps, exportAsGif = exportAsGif, createdAt = createdAt, isDateOverlayEnabled = true).toEntity())
     }
 
     suspend fun updateProject(project: Project) {

@@ -105,6 +105,7 @@ class VideoGenerator @Inject constructor(
             val ndcTop = 1 - (top / h) * 2
             val ndcBottom = 1 - (bottom / h) * 2
 
+            // Create Crop effect using NDC coordinates
             val cropEffect = Crop(ndcLeft, ndcRight, ndcBottom, ndcTop)
 
             val effects = mutableListOf<Effect>(cropEffect)
@@ -246,7 +247,8 @@ class VideoGenerator @Inject constructor(
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         val x = width / 2f
-        val y = height - 100f
+        // Dynamic Y position: 5% padding from bottom + text height/descent adjustment
+        val y = height - (height * 0.05f) - paint.descent()
         canvas.drawText(dateString, x, y, paint)
         return bitmap
     }
@@ -266,27 +268,39 @@ class VideoGenerator @Inject constructor(
              val result = imageLoader.loadOptimizedBitmap(uri, targetW, targetH) ?: return false
              val rotatedBitmap = result.bitmap
              val sampleSize = result.sampleSize
+
+             // Calculate scale to cover the target area (CenterCrop)
              val scale = kotlin.math.max(targetW.toFloat() / rotatedBitmap.width, targetH.toFloat() / rotatedBitmap.height)
+
+             // Calculate virtual scaled dimensions (if we were to scale the whole image)
              val scaledW = (rotatedBitmap.width * scale)
              val scaledH = (rotatedBitmap.height * scale)
+
              var cropX = (scaledW - targetW) / 2
              var cropY = (scaledH - targetH) / 2
 
              if (faceX != null && faceY != null && faceW != null && faceH != null) {
+                  // Adjust full-resolution face coordinates to the loaded (potentially subsampled) bitmap coordinate system
+                  // faceX (Full) -> faceX / sampleSize (Loaded) -> * scale (Target)
                   val sFaceX = (faceX / sampleSize) * scale
                   val sFaceY = (faceY / sampleSize) * scale
                   val sFaceW = (faceW / sampleSize) * scale
                   val sFaceH = (faceH / sampleSize) * scale
+
                   val faceCenterX = sFaceX + (sFaceW / 2)
                   val faceCenterY = sFaceY + (sFaceH / 2)
+
                   cropX = (faceCenterX - targetW / 2).coerceIn(0f, scaledW - targetW)
                   cropY = (faceCenterY - targetH / 2).coerceIn(0f, scaledH - targetH)
              } else if (faceX != null && faceY != null && faceW != null) {
                   val sFaceX = (faceX / sampleSize) * scale
                   val sFaceY = (faceY / sampleSize) * scale
                   val sFaceW = (faceW / sampleSize) * scale
+
+                  // Fallback: If faceHeight is missing, assume a square face box (height = width).
                   val faceCenterX = sFaceX + (sFaceW / 2)
                   val faceCenterY = sFaceY + (sFaceW / 2)
+
                   cropX = (faceCenterX - targetW / 2).coerceIn(0f, scaledW - targetW)
                   cropY = (faceCenterY - targetH / 2).coerceIn(0f, scaledH - targetH)
              }
