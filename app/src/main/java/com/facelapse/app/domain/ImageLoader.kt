@@ -10,6 +10,8 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -18,10 +20,51 @@ data class LoadedBitmap(
     val sampleSize: Int
 )
 
+data class ExifData(
+    val timestamp: LocalDateTime,
+    val rotation: Int
+)
+
 @Singleton
 class ImageLoader @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
+    fun getExifData(uri: Uri): ExifData {
+        val tempFile = copyToTemp(uri) ?: return ExifData(LocalDateTime.now(), 0)
+        return try {
+            val exifInterface = ExifInterface(tempFile.absolutePath)
+
+            // Rotation
+            val rotation = when (exifInterface.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
+                ExifInterface.ORIENTATION_ROTATE_90 -> 90
+                ExifInterface.ORIENTATION_ROTATE_180 -> 180
+                ExifInterface.ORIENTATION_ROTATE_270 -> 270
+                else -> 0
+            }
+
+            // Timestamp
+            val dateTimeString = exifInterface.getAttribute(ExifInterface.TAG_DATETIME)
+            val timestamp = if (dateTimeString != null) {
+                try {
+                    // EXIF format is typically "yyyy:MM:dd HH:mm:ss"
+                    val formatter = DateTimeFormatter.ofPattern("yyyy:MM:dd HH:mm:ss")
+                    LocalDateTime.parse(dateTimeString, formatter)
+                } catch (e: Exception) {
+                    LocalDateTime.now()
+                }
+            } else {
+                LocalDateTime.now()
+            }
+
+            ExifData(timestamp, rotation)
+        } catch (e: Exception) {
+            Log.e("ImageLoader", "Failed to read EXIF data", e)
+            ExifData(LocalDateTime.now(), 0)
+        } finally {
+            if (tempFile.exists()) tempFile.delete()
+        }
+    }
+
     fun loadUprightBitmap(uri: Uri): Bitmap? {
         return loadOptimizedBitmap(uri)?.bitmap
     }

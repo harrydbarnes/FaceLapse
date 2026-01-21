@@ -17,6 +17,7 @@ import androidx.media3.effect.OverlayEffect
 import androidx.media3.effect.Presentation
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.EditedMediaItem
+import androidx.media3.transformer.EditedMediaItemSequence
 import androidx.media3.transformer.Effects
 import androidx.media3.transformer.ExportException
 import androidx.media3.transformer.ExportResult
@@ -130,7 +131,7 @@ class VideoGenerator @Inject constructor(
 
                 EditedMediaItem.Builder(MediaItem.fromUri(photo.originalUri))
                     .setDurationUs(durationMs * 1000)
-                    .setEffects(Effects(effects.toList(), listOf()))
+                    .setEffects(Effects(listOf(), effects.toList()))
                     .setFrameRate(fps.toInt())
                     .build()
             }
@@ -139,7 +140,9 @@ class VideoGenerator @Inject constructor(
                 return@withContext false
             }
 
-            val composition = Composition.Builder(editedMediaItems).build()
+        // Create a sequence from the list of items
+        val sequence = EditedMediaItemSequence(editedMediaItems)
+        val composition = Composition.Builder(sequence).build()
 
             // Execute Transformer on Main thread as it requires a Looper
             withContext(Dispatchers.Main) {

@@ -12,6 +12,7 @@ import com.facelapse.app.data.repository.ProjectRepository
 import com.facelapse.app.data.repository.SettingsRepository
 import com.facelapse.app.domain.FaceDetectionResult
 import com.facelapse.app.domain.FaceDetectorHelper
+import com.facelapse.app.domain.ImageLoader
 import com.facelapse.app.domain.VideoGenerator
 import com.facelapse.app.domain.model.Photo
 import com.facelapse.app.domain.model.Project
@@ -43,6 +44,7 @@ class ProjectViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val faceDetectorHelper: FaceDetectorHelper,
     private val videoGenerator: VideoGenerator,
+    private val imageLoader: ImageLoader,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -122,18 +124,19 @@ class ProjectViewModel @Inject constructor(
             val pid = projectId
             val currentCount = repository.getPhotosList(pid).size
             val newPhotos = uris.mapIndexed { index, uri ->
+                val exifData = imageLoader.getExifData(uri)
                 Photo(
                     id = UUID.randomUUID().toString(),
                     projectId = pid,
                     originalUri = uri.toString(),
-                    timestamp = LocalDateTime.now(),
+                    timestamp = exifData.timestamp,
                     sortOrder = currentCount + index,
                     isProcessed = false,
                     faceX = null,
                     faceY = null,
                     faceWidth = null,
                     faceHeight = null,
-                    rotation = 0
+                    rotation = exifData.rotation
                 )
             }
             repository.addPhotos(newPhotos)
