@@ -22,6 +22,7 @@ import androidx.media3.transformer.ExportException
 import androidx.media3.transformer.ExportResult
 import androidx.media3.transformer.Transformer
 import com.facelapse.app.domain.model.Photo
+import com.google.common.collect.ImmutableList
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -74,93 +75,98 @@ class VideoGenerator @Inject constructor(
 
         val dateBitmapCache = mutableMapOf<String, Bitmap>()
 
-        val editedMediaItems = photos.mapNotNull { photo ->
-            // Ensure coroutine is active during preparation
-            currentCoroutineContext().ensureActive()
+        try {
+            val editedMediaItems = photos.mapNotNull { photo ->
+                // Ensure coroutine is active during preparation
+                currentCoroutineContext().ensureActive()
 
-            val dims = imageLoader.getDimensions(Uri.parse(photo.originalUri)) ?: return@mapNotNull null
-            val (w, h) = dims
+                val dims = imageLoader.getDimensions(Uri.parse(photo.originalUri)) ?: return@mapNotNull null
+                val (w, h) = dims
 
-            // Calculate Crop
-            val scale = kotlin.math.max(targetWidth.toFloat() / w, targetHeight.toFloat() / h)
-            val cropW = targetWidth / scale
-            val cropH = targetHeight / scale
+                // Calculate Crop
+                val scale = kotlin.math.max(targetWidth.toFloat() / w, targetHeight.toFloat() / h)
+                val cropW = targetWidth / scale
+                val cropH = targetHeight / scale
 
-            var centerX = w / 2f
-            var centerY = h / 2f
+                var centerX = w / 2f
+                var centerY = h / 2f
 
-            if (photo.faceX != null && photo.faceWidth != null) {
-                val fh = photo.faceHeight ?: photo.faceWidth ?: 0f
-                centerX = photo.faceX + photo.faceWidth / 2f
-                centerY = (photo.faceY ?: 0f) + fh / 2f
-            }
+                if (photo.faceX != null && photo.faceWidth != null) {
+                    val fh = photo.faceHeight ?: photo.faceWidth ?: 0f
+                    centerX = photo.faceX + photo.faceWidth / 2f
+                    centerY = (photo.faceY ?: 0f) + fh / 2f
+                }
 
-            val left = (centerX - cropW / 2).coerceIn(0f, w - cropW)
-            val top = (centerY - cropH / 2).coerceIn(0f, h - cropH)
-            val right = left + cropW
-            val bottom = top + cropH
+                val left = (centerX - cropW / 2).coerceIn(0f, w - cropW)
+                val top = (centerY - cropH / 2).coerceIn(0f, h - cropH)
+                val right = left + cropW
+                val bottom = top + cropH
 
-            val ndcLeft = (left / w) * 2 - 1
-            val ndcRight = (right / w) * 2 - 1
-            val ndcTop = 1 - (top / h) * 2
-            val ndcBottom = 1 - (bottom / h) * 2
+                val ndcLeft = (left / w) * 2 - 1
+                val ndcRight = (right / w) * 2 - 1
+                val ndcTop = 1 - (top / h) * 2
+                val ndcBottom = 1 - (bottom / h) * 2
 
-            // Create Crop effect using NDC coordinates
-            val cropEffect = Crop(ndcLeft, ndcRight, ndcBottom, ndcTop)
+                // Create Crop effect using NDC coordinates
+                val cropEffect = Crop(ndcLeft, ndcRight, ndcBottom, ndcTop)
 
-            val effects = mutableListOf<Effect>(cropEffect)
-            effects.add(Presentation.createForWidthAndHeight(targetWidth, targetHeight, Presentation.LAYOUT_SCALE_TO_FIT))
+                val effects = mutableListOf<Effect>(cropEffect)
+                effects.add(Presentation.createForWidthAndHeight(targetWidth, targetHeight, Presentation.LAYOUT_SCALE_TO_FIT))
 
-            if (isDateOverlayEnabled && dateFormatter != null && datePaint != null) {
-                 val dateString = try {
-                     dateFormatter.format(photo.timestamp)
-                 } catch (e: Exception) {
-                     "Error"
-                 }
-                 val dateBitmap = dateBitmapCache.getOrPut(dateString) {
-                     createDateBitmap(dateString, datePaint, targetWidth, targetHeight)
-                 }
-                 val overlay = BitmapOverlay.createStaticBitmapOverlay(dateBitmap)
-                 effects.add(OverlayEffect(listOf(overlay)))
-            }
+                if (isDateOverlayEnabled && dateFormatter != null && datePaint != null) {
+                    val dateString = try {
+                        dateFormatter.format(photo.timestamp)
+                    } catch (e: Exception) {
+                        "Error"
+                    }
+                    val dateBitmap = dateBitmapCache.getOrPut(dateString) {
+                        createDateBitmap(dateString, datePaint, targetWidth, targetHeight)
+                    }
+                    val overlay = BitmapOverlay.createStaticBitmapOverlay(dateBitmap)
+                    effects.add(OverlayEffect(ImmutableList.copyOf(listOf(overlay))))
+                }
 
-            val durationMs = (1000f / fps).toLong()
+                val durationMs = (1000f / fps).toLong()
 
-            EditedMediaItem.Builder(MediaItem.fromUri(photo.originalUri))
-                .setDurationUs(durationMs * 1000)
-                .setEffects(Effects(effects, listOf()))
-                .setFrameRate(fps.toInt())
-                .build()
-        }
-
-        if (editedMediaItems.isEmpty()) {
-            return@withContext false
-        }
-
-        val composition = Composition.Builder(editedMediaItems).build()
-
-        // Execute Transformer on Main thread as it requires a Looper
-        withContext(Dispatchers.Main) {
-            suspendCancellableCoroutine { continuation ->
-                val transformer = Transformer.Builder(context)
-                    .setVideoMimeType(MimeTypes.VIDEO_H264)
-                    .addListener(object : Transformer.Listener {
-                        override fun onCompleted(composition: Composition, exportResult: ExportResult) {
-                            continuation.resume(true)
-                        }
-                        override fun onError(composition: Composition, result: ExportResult, exception: ExportException) {
-                            Log.e(TAG, "Export error", exception)
-                            continuation.resume(false)
-                        }
-                    })
+                EditedMediaItem.Builder(MediaItem.fromUri(photo.originalUri))
+                    .setDurationUs(durationMs * 1000)
+                    .setEffects(Effects(effects.toList(), listOf()))
+                    .setFrameRate(fps.toInt())
                     .build()
+            }
 
-                transformer.start(composition, outputFile.path)
+            if (editedMediaItems.isEmpty()) {
+                return@withContext false
+            }
 
-                continuation.invokeOnCancellation {
-                    transformer.cancel()
+            val composition = Composition.Builder(editedMediaItems).build()
+
+            // Execute Transformer on Main thread as it requires a Looper
+            withContext(Dispatchers.Main) {
+                suspendCancellableCoroutine { continuation ->
+                    val transformer = Transformer.Builder(context)
+                        .setVideoMimeType(MimeTypes.VIDEO_H264)
+                        .addListener(object : Transformer.Listener {
+                            override fun onCompleted(composition: Composition, exportResult: ExportResult) {
+                                continuation.resume(true)
+                            }
+                            override fun onError(composition: Composition, result: ExportResult, exception: ExportException) {
+                                Log.e(TAG, "Export error", exception)
+                                continuation.resume(false)
+                            }
+                        })
+                        .build()
+
+                    transformer.start(composition, outputFile.path)
+
+                    continuation.invokeOnCancellation {
+                        transformer.cancel()
+                    }
                 }
             }
+        } finally {
+            // Ensure all cached bitmaps are recycled to prevent memory leaks.
+            dateBitmapCache.values.forEach { if (!it.isRecycled) it.recycle() }
         }
     }
 
