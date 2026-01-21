@@ -14,6 +14,8 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 data class LoadedBitmap(
     val bitmap: Bitmap,
@@ -29,9 +31,9 @@ data class ExifData(
 class ImageLoader @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
-    fun getExifData(uri: Uri): ExifData {
-        val tempFile = copyToTemp(uri) ?: return ExifData(LocalDateTime.now(), 0)
-        return try {
+    suspend fun getExifData(uri: Uri): ExifData = withContext(Dispatchers.IO) {
+        val tempFile = copyToTemp(uri) ?: return@withContext ExifData(LocalDateTime.now(), 0)
+        try {
             val exifInterface = ExifInterface(tempFile.absolutePath)
 
             // Rotation
@@ -65,13 +67,13 @@ class ImageLoader @Inject constructor(
         }
     }
 
-    fun loadUprightBitmap(uri: Uri): Bitmap? {
+    suspend fun loadUprightBitmap(uri: Uri): Bitmap? {
         return loadOptimizedBitmap(uri)?.bitmap
     }
 
-    fun getDimensions(uri: Uri): Pair<Int, Int>? {
-        val tempFile = copyToTemp(uri) ?: return null
-        return try {
+    suspend fun getDimensions(uri: Uri): Pair<Int, Int>? = withContext(Dispatchers.IO) {
+        val tempFile = copyToTemp(uri) ?: return@withContext null
+        try {
             val options = BitmapFactory.Options()
             options.inJustDecodeBounds = true
             BitmapFactory.decodeFile(tempFile.absolutePath, options)
@@ -94,10 +96,10 @@ class ImageLoader @Inject constructor(
         }
     }
 
-    fun loadOptimizedBitmap(uri: Uri, reqWidth: Int? = null, reqHeight: Int? = null): LoadedBitmap? {
-        val tempFile = copyToTemp(uri) ?: return null
+    suspend fun loadOptimizedBitmap(uri: Uri, reqWidth: Int? = null, reqHeight: Int? = null): LoadedBitmap? = withContext(Dispatchers.IO) {
+        val tempFile = copyToTemp(uri) ?: return@withContext null
 
-        return try {
+        try {
             val rotationInDegrees = getRotation(tempFile)
 
             val options = BitmapFactory.Options()
@@ -118,7 +120,7 @@ class ImageLoader @Inject constructor(
             options.inJustDecodeBounds = false
             options.inSampleSize = inSampleSize
 
-            val bitmap = BitmapFactory.decodeFile(tempFile.absolutePath, options) ?: return null
+            val bitmap = BitmapFactory.decodeFile(tempFile.absolutePath, options) ?: return@withContext null
 
             val rotated = try {
                 if (rotationInDegrees != 0) {

@@ -32,6 +32,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -123,21 +125,23 @@ class ProjectViewModel @Inject constructor(
         viewModelScope.launch {
             val pid = projectId
             val currentCount = repository.getPhotosList(pid).size
-            val newPhotos = uris.mapIndexed { index, uri ->
-                val exifData = imageLoader.getExifData(uri)
-                Photo(
-                    id = UUID.randomUUID().toString(),
-                    projectId = pid,
-                    originalUri = uri.toString(),
-                    timestamp = exifData.timestamp,
-                    sortOrder = currentCount + index,
-                    isProcessed = false,
-                    faceX = null,
-                    faceY = null,
-                    faceWidth = null,
-                    faceHeight = null,
-                    rotation = exifData.rotation
-                )
+            val newPhotos = withContext(Dispatchers.IO) {
+                uris.mapIndexed { index, uri ->
+                    val exifData = imageLoader.getExifData(uri)
+                    Photo(
+                        id = UUID.randomUUID().toString(),
+                        projectId = pid,
+                        originalUri = uri.toString(),
+                        timestamp = exifData.timestamp,
+                        sortOrder = currentCount + index,
+                        isProcessed = false,
+                        faceX = null,
+                        faceY = null,
+                        faceWidth = null,
+                        faceHeight = null,
+                        rotation = exifData.rotation
+                    )
+                }
             }
             repository.addPhotos(newPhotos)
         }

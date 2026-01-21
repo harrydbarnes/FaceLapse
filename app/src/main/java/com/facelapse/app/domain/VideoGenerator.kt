@@ -262,7 +262,7 @@ class VideoGenerator @Inject constructor(
         return bitmap
     }
 
-    private fun loadBitmapToCanvas(
+    private suspend fun loadBitmapToCanvas(
         uri: Uri,
         frameBuffer: FrameBuffer,
         faceX: Float?,
