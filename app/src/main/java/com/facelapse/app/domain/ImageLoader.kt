@@ -45,7 +45,9 @@ class ImageLoader @Inject constructor(
             }
 
             // Timestamp
-            val dateTimeString = exifInterface.getAttribute(ExifInterface.TAG_DATETIME)
+            val dateTimeString = exifInterface.getAttribute(ExifInterface.TAG_DATETIME_ORIGINAL)
+                ?: exifInterface.getAttribute(ExifInterface.TAG_DATETIME)
+
             val timestamp = if (dateTimeString != null) {
                 try {
                     // EXIF format is typically "yyyy:MM:dd HH:mm:ss"

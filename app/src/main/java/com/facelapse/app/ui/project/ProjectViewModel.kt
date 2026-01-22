@@ -34,6 +34,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import java.io.File
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -127,21 +129,23 @@ class ProjectViewModel @Inject constructor(
             val currentCount = repository.getPhotosList(pid).size
             val newPhotos = withContext(Dispatchers.IO) {
                 uris.mapIndexed { index, uri ->
-                    val exifData = imageLoader.getExifData(uri)
-                    Photo(
-                        id = UUID.randomUUID().toString(),
-                        projectId = pid,
-                        originalUri = uri.toString(),
-                        timestamp = exifData.timestamp,
-                        sortOrder = currentCount + index,
-                        isProcessed = false,
-                        faceX = null,
-                        faceY = null,
-                        faceWidth = null,
-                        faceHeight = null,
-                        rotation = exifData.rotation
-                    )
-                }
+                    async {
+                        val exifData = imageLoader.getExifData(uri)
+                        Photo(
+                            id = UUID.randomUUID().toString(),
+                            projectId = pid,
+                            originalUri = uri.toString(),
+                            timestamp = exifData.timestamp,
+                            sortOrder = currentCount + index,
+                            isProcessed = false,
+                            faceX = null,
+                            faceY = null,
+                            faceWidth = null,
+                            faceHeight = null,
+                            rotation = exifData.rotation
+                        )
+                    }
+                }.awaitAll()
             }
             repository.addPhotos(newPhotos)
         }
