@@ -144,7 +144,7 @@ fun FaceAuditItem(
     }
 
     // Define colors for selected (highlight) vs unselected (outline) faces
-    val highlightColor = MaterialTheme.colorScheme.tertiary
+    val highlightColor = MaterialTheme.colorScheme.primary
     val outlineColor = MaterialTheme.colorScheme.outline
 
     Box(

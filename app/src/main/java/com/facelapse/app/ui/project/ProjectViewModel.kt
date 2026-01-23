@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.PointF
 import android.net.Uri
+import android.util.Log
 import androidx.core.content.FileProvider
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -131,7 +132,10 @@ class ProjectViewModel @Inject constructor(
             val newPhotos = withContext(Dispatchers.IO) {
                 uris.mapIndexed { index, uri ->
                     async {
-                        val exifData = imageLoader.getExifData(uri) ?: return@async null
+                        val exifData = imageLoader.getExifData(uri) ?: run {
+                            Log.w("ProjectViewModel", "Could not load EXIF data for URI: $uri")
+                            return@async null
+                        }
                         Photo(
                             id = UUID.randomUUID().toString(),
                             projectId = pid,
