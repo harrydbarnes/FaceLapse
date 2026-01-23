@@ -66,7 +66,7 @@ class ImageLoader @Inject constructor(
             Log.e("ImageLoader", "Failed to read EXIF data", e)
             ExifData(LocalDateTime.now(), 0)
         } finally {
-            if (tempFile.exists()) tempFile.delete()
+            if (tempFile != null && tempFile.exists()) tempFile.delete()
         }
     }
 
@@ -95,7 +95,7 @@ class ImageLoader @Inject constructor(
              Log.e("ImageLoader", "Error getting dimensions", e)
              null
         } finally {
-            if (tempFile.exists()) tempFile.delete()
+            if (tempFile != null && tempFile.exists()) tempFile.delete()
         }
     }
 
@@ -149,7 +149,7 @@ class ImageLoader @Inject constructor(
             Log.e("ImageLoader", "Error loading bitmap from URI: $uri", t)
             null
         } finally {
-            if (tempFile.exists()) {
+            if (tempFile != null && tempFile.exists()) {
                 tempFile.delete()
             }
         }

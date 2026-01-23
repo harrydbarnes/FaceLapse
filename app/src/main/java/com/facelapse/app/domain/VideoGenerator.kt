@@ -76,6 +76,7 @@ class VideoGenerator @Inject constructor(
         } else null
 
         val dateBitmapCache = mutableMapOf<String, Bitmap>()
+        val dateOverlayCache = mutableMapOf<String, OverlayEffect>()
 
         try {
             val editedMediaItems = photos.mapNotNull { photo ->
@@ -122,11 +123,13 @@ class VideoGenerator @Inject constructor(
                         Log.e(TAG, "Failed to format timestamp: ${photo.timestamp}", e)
                         "Error"
                     }
-                    val dateBitmap = dateBitmapCache.getOrPut(dateString) {
-                        createDateBitmap(dateString, datePaint, targetWidth, targetHeight)
+                    val overlayEffect = dateOverlayCache.getOrPut(dateString) {
+                        val dateBitmap = createDateBitmap(dateString, datePaint, targetWidth, targetHeight)
+                        dateBitmapCache[dateString] = dateBitmap
+                        val overlay = BitmapOverlay.createStaticBitmapOverlay(dateBitmap)
+                        OverlayEffect(ImmutableList.copyOf(listOf(overlay)))
                     }
-                    val overlay = BitmapOverlay.createStaticBitmapOverlay(dateBitmap)
-                    effects.add(OverlayEffect(ImmutableList.copyOf(listOf(overlay))))
+                    effects.add(overlayEffect)
                 }
 
                 val durationMs = (1000f / fps).toLong()

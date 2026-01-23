@@ -59,8 +59,8 @@ class ProjectViewModel @Inject constructor(
 
     private val _projectId = MutableStateFlow<String?>(savedStateHandle["projectId"])
 
-    private val projectId: String
-        get() = _projectId.value ?: throw IllegalStateException("Project ID not set")
+    private val projectId: String?
+        get() = _projectId.value
 
     fun setProjectId(id: String) {
         _projectId.value = id
@@ -119,13 +119,14 @@ class ProjectViewModel @Inject constructor(
 
     fun renameProject(name: String) {
         viewModelScope.launch {
-            repository.renameProject(projectId, name)
+            val id = projectId ?: return@launch
+            repository.renameProject(id, name)
         }
     }
 
     fun addPhotos(uris: List<Uri>) {
         viewModelScope.launch {
-            val pid = projectId
+            val pid = projectId ?: return@launch
             val currentCount = repository.getPhotosList(pid).size
             val newPhotos = withContext(Dispatchers.IO) {
                 uris.mapIndexed { index, uri ->
@@ -153,7 +154,8 @@ class ProjectViewModel @Inject constructor(
 
     fun movePhoto(photo: Photo, moveUp: Boolean) {
         viewModelScope.launch {
-            val currentPhotos = repository.getPhotosList(projectId).toMutableList()
+            val id = projectId ?: return@launch
+            val currentPhotos = repository.getPhotosList(id).toMutableList()
             val index = currentPhotos.indexOfFirst { it.id == photo.id }
             if (index == -1) return@launch
 
@@ -192,7 +194,12 @@ class ProjectViewModel @Inject constructor(
     fun processFaces() {
         viewModelScope.launch {
             _isProcessing.value = true
-            val currentPhotos = repository.getPhotosList(projectId).sortedBy { it.sortOrder }
+            val id = projectId
+            if (id == null) {
+                _isProcessing.value = false
+                return@launch
+            }
+            val currentPhotos = repository.getPhotosList(id).sortedBy { it.sortOrder }
 
             var previousFaceCenter: PointF? = null
 
@@ -307,7 +314,8 @@ class ProjectViewModel @Inject constructor(
     }
 
     private suspend fun updateProjectInternal(fps: Float, exportAsGif: Boolean, isDateOverlayEnabled: Boolean): Project? {
-        val currentProject = repository.getProject(projectId) ?: return null
+        val id = projectId ?: return null
+        val currentProject = repository.getProject(id) ?: return null
         val updatedProject = currentProject.copy(
             fps = fps,
             exportAsGif = exportAsGif,
@@ -336,7 +344,12 @@ class ProjectViewModel @Inject constructor(
     private suspend fun exportVideoInternal(context: Context, project: Project) {
         _isGenerating.value = true
         try {
-            val currentPhotos = repository.getPhotosList(projectId)
+            val id = projectId
+            if (id == null) {
+                _isGenerating.value = false
+                return
+            }
+            val currentPhotos = repository.getPhotosList(id)
 
             val safeName = project.name.replace(SAFE_FILENAME_REGEX, "_")
             val timestamp = LocalDateTime.now().format(filenameTimestampFormatter)
