@@ -54,6 +54,7 @@ class ImageLoader @Inject constructor(
                     val formatter = DateTimeFormatter.ofPattern("yyyy:MM:dd HH:mm:ss")
                     LocalDateTime.parse(dateTimeString, formatter)
                 } catch (e: Exception) {
+                    Log.w("ImageLoader", "Failed to parse EXIF timestamp '$dateTimeString'", e)
                     LocalDateTime.now()
                 }
             } else {
