@@ -59,6 +59,7 @@ class VideoGenerator @Inject constructor(
              try {
                  DateTimeFormatter.ofPattern(dateFormat, java.util.Locale.getDefault())
              } catch (e: Exception) {
+                 Log.w(TAG, "Invalid date format provided: $dateFormat", e)
                  null
              }
         } else null
@@ -118,6 +119,7 @@ class VideoGenerator @Inject constructor(
                     val dateString = try {
                         dateFormatter.format(photo.timestamp)
                     } catch (e: Exception) {
+                        Log.e(TAG, "Failed to format timestamp: ${photo.timestamp}", e)
                         "Error"
                     }
                     val dateBitmap = dateBitmapCache.getOrPut(dateString) {
@@ -212,6 +214,7 @@ class VideoGenerator @Inject constructor(
                         try {
                             DateTimeFormatter.ofPattern(dateFormat, java.util.Locale.getDefault())
                         } catch (e: Exception) {
+                            Log.w(TAG, "Invalid date format for GIF: $dateFormat", e)
                             null
                         }
                     } else null
@@ -336,6 +339,7 @@ class VideoGenerator @Inject constructor(
         val dateString = try {
             dateFormatter?.format(timestamp) ?: "Error"
         } catch (e: Exception) {
+             Log.e(TAG, "Failed to format timestamp for GIF overlay: $timestamp", e)
              "Error"
         }
         val x = bitmap.width / 2f
