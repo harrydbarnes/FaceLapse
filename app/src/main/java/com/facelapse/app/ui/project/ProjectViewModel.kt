@@ -131,7 +131,7 @@ class ProjectViewModel @Inject constructor(
             val newPhotos = withContext(Dispatchers.IO) {
                 uris.mapIndexed { index, uri ->
                     async {
-                        val exifData = imageLoader.getExifData(uri)
+                        val exifData = imageLoader.getExifData(uri) ?: return@async null
                         Photo(
                             id = UUID.randomUUID().toString(),
                             projectId = pid,
@@ -146,7 +146,7 @@ class ProjectViewModel @Inject constructor(
                             rotation = exifData.rotation
                         )
                     }
-                }.awaitAll()
+                }.awaitAll().filterNotNull()
             }
             repository.addPhotos(newPhotos)
         }

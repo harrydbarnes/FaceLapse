@@ -31,8 +31,8 @@ data class ExifData(
 class ImageLoader @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
-    suspend fun getExifData(uri: Uri): ExifData = withContext(Dispatchers.IO) {
-        val tempFile = copyToTemp(uri) ?: return@withContext ExifData(LocalDateTime.now(), 0)
+    suspend fun getExifData(uri: Uri): ExifData? = withContext(Dispatchers.IO) {
+        val tempFile = copyToTemp(uri) ?: return@withContext null
         try {
             val exifInterface = ExifInterface(tempFile.absolutePath)
 
@@ -64,7 +64,7 @@ class ImageLoader @Inject constructor(
             ExifData(timestamp, rotation)
         } catch (e: Exception) {
             Log.e("ImageLoader", "Failed to read EXIF data", e)
-            ExifData(LocalDateTime.now(), 0)
+            null
         } finally {
             if (tempFile != null && tempFile.exists()) tempFile.delete()
         }
