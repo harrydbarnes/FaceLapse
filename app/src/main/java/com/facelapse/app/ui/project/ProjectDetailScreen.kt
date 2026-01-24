@@ -51,6 +51,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import android.os.Build
+import android.net.Uri
 import coil.compose.AsyncImagePainter
 import coil.compose.rememberAsyncImagePainter
 import coil.decode.GifDecoder
@@ -135,7 +136,7 @@ fun ProjectDetailScreen(
                 val titleModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && project != null) {
                     with(sharedTransitionScope) {
                          Modifier.sharedElement(
-                             state = rememberSharedContentState(key = "project-title-${project?.id ?: "unknown"}"),
+                             state = rememberSharedContentState(key = "project-title-${project.id}"),
                              animatedVisibilityScope = animatedVisibilityScope
                          )
                     }
@@ -186,7 +187,7 @@ fun ProjectDetailScreen(
                                 enabled = !isGenerating && !isProcessing && photos.isNotEmpty()
                             ) {
                                 Icon(
-                                    imageVector = if (audioUri != null) Icons.Default.CheckCircle else Icons.Default.Audiotrack,
+                                    imageVector = if (audioUri != null) Icons.Default.CheckCircle else Icons.AutoMirrored.Filled.VolumeUp,
                                     contentDescription = "Add Background Audio",
                                     tint = if (audioUri != null) MaterialTheme.colorScheme.primary else LocalContentColor.current
                                 )

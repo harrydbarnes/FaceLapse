@@ -376,8 +376,8 @@ class ProjectViewModel @Inject constructor(
                         isDateOverlayEnabled = isDateOverlayEnabled,
                         dateFontSize = dateFontSize,
                         dateFormat = dateFormat,
-                        fps = project.fps,
-                        audioUri = audioUri
+                        fps = project.fps
+                        // GIF does not support audio, so audioUri is ignored
                     )
                 }
             } else {
@@ -390,7 +390,8 @@ class ProjectViewModel @Inject constructor(
                         isDateOverlayEnabled = isDateOverlayEnabled,
                         dateFontSize = dateFontSize,
                         dateFormat = dateFormat,
-                        fps = project.fps
+                        fps = project.fps,
+                        audioUri = audioUri
                     )
                 }
             }

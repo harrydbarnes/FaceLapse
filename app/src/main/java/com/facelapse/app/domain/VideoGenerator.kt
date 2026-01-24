@@ -216,7 +216,7 @@ class VideoGenerator @Inject constructor(
                 sequences.add(EditedMediaItemSequence(ImmutableList.of(audioItem)))
             }
 
-            val composition = Composition.Builder(*sequences.toTypedArray()).build()
+            val composition = Composition.Builder(sequences).build()
 
             // Execute Transformer on Main thread as it requires a Looper
             withContext(Dispatchers.Main) {
