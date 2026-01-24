@@ -229,7 +229,7 @@ fun FaceAuditItem(
                         .padding(8.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                         Icon(Icons.Default.Warning, stringResource(R.string.face_audit_no_faces_detected), tint = MaterialTheme.colorScheme.onErrorContainer)
+                         Icon(Icons.Default.Warning, "Warning", tint = MaterialTheme.colorScheme.onErrorContainer)
                          Spacer(modifier = Modifier.width(8.dp))
                          Text(stringResource(R.string.face_audit_no_faces_detected), color = MaterialTheme.colorScheme.onErrorContainer)
                     }
