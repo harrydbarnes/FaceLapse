@@ -58,7 +58,7 @@ class ProjectViewModel @Inject constructor(
         private val SAFE_FILENAME_REGEX = Regex("[^a-zA-Z0-9.-]")
     }
 
-    private val _projectId = MutableStateFlow<String?>(savedStateHandle["projectId"])
+    private val _projectId = MutableStateFlow<String?>(null)
 
     private val projectId: String?
         get() = _projectId.value
