@@ -299,14 +299,14 @@ class ProjectViewModel @Inject constructor(
      * Atomically saves settings and then triggers export to prevent race conditions where
      * the export uses stale settings.
      */
-    fun saveAndExport(context: Context, fps: Float, exportAsGif: Boolean, isDateOverlayEnabled: Boolean) {
+    fun saveAndExport(context: Context, fps: Float, exportAsGif: Boolean, isDateOverlayEnabled: Boolean, audioUri: Uri? = null) {
         viewModelScope.launch {
             _isGenerating.value = true
             try {
                 val updatedProject = updateProjectInternal(fps, exportAsGif, isDateOverlayEnabled)
                 if (updatedProject != null) {
                     // exportVideoInternal will set _isGenerating to false in its own finally block.
-                    exportVideoInternal(context, updatedProject)
+                    exportVideoInternal(context, updatedProject, audioUri)
                 } else {
                     _isGenerating.value = false
                 }
@@ -329,13 +329,13 @@ class ProjectViewModel @Inject constructor(
         return updatedProject
     }
 
-    fun exportVideo(context: Context) {
+    fun exportVideo(context: Context, audioUri: Uri? = null) {
         viewModelScope.launch {
             _isGenerating.value = true
             try {
                 val projectVal = project.value
                 if (projectVal != null) {
-                    exportVideoInternal(context, projectVal)
+                    exportVideoInternal(context, projectVal, audioUri)
                 } else {
                     _isGenerating.value = false
                 }
@@ -345,7 +345,7 @@ class ProjectViewModel @Inject constructor(
         }
     }
 
-    private suspend fun exportVideoInternal(context: Context, project: Project) {
+    private suspend fun exportVideoInternal(context: Context, project: Project, audioUri: Uri?) {
         _isGenerating.value = true
         try {
             val id = projectId
@@ -376,7 +376,8 @@ class ProjectViewModel @Inject constructor(
                         isDateOverlayEnabled = isDateOverlayEnabled,
                         dateFontSize = dateFontSize,
                         dateFormat = dateFormat,
-                        fps = project.fps
+                        fps = project.fps,
+                        audioUri = audioUri
                     )
                 }
             } else {

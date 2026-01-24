@@ -58,6 +58,10 @@ import coil.decode.ImageDecoderDecoder
 import coil.request.ImageRequest
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerView
 import com.facelapse.app.R
 import com.facelapse.app.domain.model.Photo
 import com.facelapse.app.domain.model.Project
@@ -90,6 +94,15 @@ fun ProjectDetailScreen(
         contract = ActivityResultContracts.PickMultipleVisualMedia()
     ) { uris ->
         if (uris.isNotEmpty()) viewModel.addPhotos(uris)
+    }
+
+    var audioUri by remember { mutableStateOf<Uri?>(null) }
+    val audioPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            audioUri = uri
+        }
     }
 
     var showMenu by remember { mutableStateOf(false) }
@@ -167,6 +180,18 @@ fun ProjectDetailScreen(
                                 )
                             }
                         }
+                        ActionTooltip(tooltip = "Add Background Audio") {
+                            IconButton(
+                                onClick = { audioPickerLauncher.launch("audio/*") },
+                                enabled = !isGenerating && !isProcessing && photos.isNotEmpty()
+                            ) {
+                                Icon(
+                                    imageVector = if (audioUri != null) Icons.Default.CheckCircle else Icons.Default.Audiotrack,
+                                    contentDescription = "Add Background Audio",
+                                    tint = if (audioUri != null) MaterialTheme.colorScheme.primary else LocalContentColor.current
+                                )
+                            }
+                        }
                         ActionTooltip(tooltip = stringResource(R.string.action_project_settings)) {
                             IconButton(
                                 onClick = { showSettingsDialog = true },
@@ -180,7 +205,7 @@ fun ProjectDetailScreen(
                         }
                         ActionTooltip(tooltip = stringResource(R.string.action_share_project)) {
                             IconButton(
-                                onClick = { viewModel.exportVideo(context) },
+                                onClick = { viewModel.exportVideo(context, audioUri) },
                                 enabled = !isGenerating && !isProcessing && photos.isNotEmpty()
                             ) {
                                 Icon(
@@ -270,7 +295,7 @@ fun ProjectDetailScreen(
                     viewModel.updateProjectSettings(fps, isGif, isOverlay)
                 },
                 onExport = { fps, isGif, isOverlay ->
-                    viewModel.saveAndExport(context, fps, isGif, isOverlay)
+                    viewModel.saveAndExport(context, fps, isGif, isOverlay, audioUri)
                 }
             )
         }
@@ -496,16 +521,29 @@ fun PreviewDialog(
                 ) {
                     if (result.mimeType.startsWith("video/")) {
                         val context = LocalContext.current
-                        val videoView = remember { android.widget.VideoView(context) }
-                        AndroidView(factory = { videoView }, modifier = Modifier.fillMaxSize())
-                        DisposableEffect(result.uri) {
-                            videoView.setVideoURI(result.uri)
-                            videoView.setOnCompletionListener { it.start() }
-                            videoView.start()
-                            onDispose {
-                                videoView.stopPlayback()
+                        val exoPlayer = remember {
+                            ExoPlayer.Builder(context).build().apply {
+                                setMediaItem(MediaItem.fromUri(result.uri))
+                                repeatMode = Player.REPEAT_MODE_ONE
+                                playWhenReady = true
+                                prepare()
                             }
                         }
+
+                        DisposableEffect(Unit) {
+                            onDispose {
+                                exoPlayer.release()
+                            }
+                        }
+
+                        AndroidView(
+                            factory = {
+                                PlayerView(context).apply {
+                                    player = exoPlayer
+                                }
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        )
                     } else {
                         // GIF
                          Image(

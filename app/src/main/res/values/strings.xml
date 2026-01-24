@@ -22,4 +22,12 @@
     <string name="empty_photos_icon_description">Face icon</string>
     <string name="empty_photos_state_title">No photos yet</string>
     <string name="empty_photos_state_subtitle">Add photos of the same person to start building your timelapse</string>
+
+    <!-- Face Audit -->
+    <string name="face_audit_title">Face Audit</string>
+    <string name="face_audit_no_photos">No photos in project.</string>
+    <string name="face_audit_tap_instruction">Tap a face to select it</string>
+    <string name="action_previous">Previous</string>
+    <string name="action_next">Next</string>
+    <string name="face_audit_no_faces_detected">No faces detected</string>
 </resources>

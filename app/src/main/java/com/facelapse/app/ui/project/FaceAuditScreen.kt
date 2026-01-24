@@ -28,6 +28,8 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImagePainter
 import coil.compose.rememberAsyncImagePainter
+import androidx.compose.ui.res.stringResource
+import com.facelapse.app.R
 import com.facelapse.app.domain.model.Photo
 import com.google.mlkit.vision.face.Face
 import kotlinx.coroutines.launch
@@ -49,7 +51,7 @@ fun FaceAuditScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("Face Audit")
+                        Text(stringResource(R.string.face_audit_title))
                         if (photos.isNotEmpty()) {
                             Text(
                                 "${pagerState.currentPage + 1} / ${photos.size}",
@@ -73,7 +75,7 @@ fun FaceAuditScreen(
                     .padding(padding),
                 contentAlignment = Alignment.Center
             ) {
-                Text("No photos in project.")
+                Text(stringResource(R.string.face_audit_no_photos))
             }
         } else {
             Column(modifier = Modifier.padding(padding)) {
@@ -104,7 +106,7 @@ fun FaceAuditScreen(
                         },
                         enabled = pagerState.currentPage > 0
                     ) {
-                        Text("Previous")
+                        Text(stringResource(R.string.action_previous))
                     }
 
                     Button(
@@ -115,7 +117,7 @@ fun FaceAuditScreen(
                         },
                         enabled = pagerState.currentPage < photos.size - 1
                     ) {
-                        Text("Next")
+                        Text(stringResource(R.string.action_next))
                     }
                 }
             }
@@ -227,9 +229,9 @@ fun FaceAuditItem(
                         .padding(8.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                         Icon(Icons.Default.Warning, "No faces", tint = MaterialTheme.colorScheme.onErrorContainer)
+                         Icon(Icons.Default.Warning, stringResource(R.string.face_audit_no_faces_detected), tint = MaterialTheme.colorScheme.onErrorContainer)
                          Spacer(modifier = Modifier.width(8.dp))
-                         Text("No faces detected", color = MaterialTheme.colorScheme.onErrorContainer)
+                         Text(stringResource(R.string.face_audit_no_faces_detected), color = MaterialTheme.colorScheme.onErrorContainer)
                     }
                 }
             } else if (!isLoading && currentSelectedFace == null && detectedFaces.isNotEmpty()) {
@@ -240,7 +242,7 @@ fun FaceAuditItem(
                         .background(MaterialTheme.colorScheme.tertiaryContainer, shape = MaterialTheme.shapes.medium)
                         .padding(8.dp)
                 ) {
-                     Text("Tap a face to select it", color = MaterialTheme.colorScheme.onTertiaryContainer)
+                     Text(stringResource(R.string.face_audit_tap_instruction), color = MaterialTheme.colorScheme.onTertiaryContainer)
                 }
             }
         }

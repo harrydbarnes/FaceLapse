@@ -25,6 +25,7 @@ import androidx.media3.transformer.Transformer
 import com.facelapse.app.domain.model.Photo
 import com.google.common.collect.ImmutableList
 import dagger.hilt.android.qualifiers.ApplicationContext
+import pl.droidsonroids.gif.GifEncoder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -43,6 +44,68 @@ class VideoGenerator @Inject constructor(
     private val imageLoader: ImageLoader
 ) {
 
+    private data class CropParams(
+        val centerX: Float,
+        val centerY: Float,
+        val scale: Float,
+        val originalWidth: Int,
+        val originalHeight: Int
+    )
+
+    private suspend fun calculateSmoothedCropParams(
+        photos: List<Photo>,
+        targetWidth: Int,
+        targetHeight: Int
+    ): List<CropParams?> {
+        val rawParams = photos.map { photo ->
+            val dims = imageLoader.getDimensions(Uri.parse(photo.originalUri)) ?: return@map null
+            val (w, h) = dims
+
+            // Base scale to fill screen
+            val minScale = kotlin.math.max(targetWidth.toFloat() / w, targetHeight.toFloat() / h)
+            var scale = minScale
+
+            // Zoom effect (Face Normalization)
+            if (photo.faceWidth != null && photo.faceWidth > 0) {
+                val targetFaceWidth = targetWidth * 0.4f
+                val faceScale = targetFaceWidth / photo.faceWidth
+                scale = kotlin.math.max(minScale, faceScale)
+            }
+
+            var centerX = w / 2f
+            var centerY = h / 2f
+
+            if (photo.faceX != null && photo.faceWidth != null) {
+                val fh = photo.faceHeight ?: photo.faceWidth ?: 0f
+                centerX = photo.faceX + photo.faceWidth / 2f
+                centerY = (photo.faceY ?: 0f) + fh / 2f
+            }
+
+            CropParams(centerX, centerY, scale, w, h)
+        }
+
+        val smoothed = mutableListOf<CropParams?>()
+        var current: CropParams? = null
+
+        for (raw in rawParams) {
+            if (raw == null) {
+                smoothed.add(null)
+                continue
+            }
+
+            if (current == null) {
+                current = raw
+            } else {
+                val smoothX = (raw.centerX * 0.2f) + (current!!.centerX * 0.8f)
+                val smoothY = (raw.centerY * 0.2f) + (current!!.centerY * 0.8f)
+                val smoothScale = (raw.scale * 0.2f) + (current!!.scale * 0.8f)
+                current = CropParams(smoothX, smoothY, smoothScale, raw.originalWidth, raw.originalHeight)
+            }
+            smoothed.add(current)
+        }
+        return smoothed
+    }
+
     suspend fun generateVideo(
         photos: List<Photo>,
         outputFile: File,
@@ -51,7 +114,8 @@ class VideoGenerator @Inject constructor(
         dateFormat: String,
         targetWidth: Int = 1080,
         targetHeight: Int = 1920,
-        fps: Float = 10f
+        fps: Float = 10f,
+        audioUri: Uri? = null
     ): Boolean = withContext(Dispatchers.IO) {
         if (outputFile.exists()) outputFile.delete()
 
@@ -79,26 +143,21 @@ class VideoGenerator @Inject constructor(
         val dateOverlayCache = mutableMapOf<String, OverlayEffect>()
 
         try {
-            val editedMediaItems = photos.mapNotNull { photo ->
-                // Ensure coroutine is active during preparation
+            val cropParamsList = calculateSmoothedCropParams(photos, targetWidth, targetHeight)
+
+            val editedMediaItems = photos.zip(cropParamsList).mapNotNull { (photo, params) ->
                 currentCoroutineContext().ensureActive()
 
-                val dims = imageLoader.getDimensions(Uri.parse(photo.originalUri)) ?: return@mapNotNull null
-                val (w, h) = dims
+                if (params == null) return@mapNotNull null
 
-                // Calculate Crop
-                val scale = kotlin.math.max(targetWidth.toFloat() / w, targetHeight.toFloat() / h)
+                val w = params.originalWidth
+                val h = params.originalHeight
+                val scale = params.scale
+                val centerX = params.centerX
+                val centerY = params.centerY
+
                 val cropW = targetWidth / scale
                 val cropH = targetHeight / scale
-
-                var centerX = w / 2f
-                var centerY = h / 2f
-
-                if (photo.faceX != null && photo.faceWidth != null) {
-                    val fh = photo.faceHeight ?: photo.faceWidth ?: 0f
-                    centerX = photo.faceX + photo.faceWidth / 2f
-                    centerY = (photo.faceY ?: 0f) + fh / 2f
-                }
 
                 val left = (centerX - cropW / 2).coerceIn(0f, w - cropW)
                 val top = (centerY - cropH / 2).coerceIn(0f, h - cropH)
@@ -145,9 +204,19 @@ class VideoGenerator @Inject constructor(
                 return@withContext false
             }
 
-        // Create a sequence from the list of items
-        val sequence = EditedMediaItemSequence(editedMediaItems)
-        val composition = Composition.Builder(sequence).build()
+            val videoSequence = EditedMediaItemSequence(editedMediaItems)
+            val sequences = mutableListOf(videoSequence)
+
+            if (audioUri != null) {
+                val totalDurationUs = editedMediaItems.sumOf { it.durationUs }
+                val audioItem = EditedMediaItem.Builder(MediaItem.fromUri(audioUri))
+                    .setRemoveVideo(true)
+                    .setDurationUs(totalDurationUs)
+                    .build()
+                sequences.add(EditedMediaItemSequence(ImmutableList.of(audioItem)))
+            }
+
+            val composition = Composition.Builder(*sequences.toTypedArray()).build()
 
             // Execute Transformer on Main thread as it requires a Looper
             withContext(Dispatchers.Main) {
@@ -195,13 +264,10 @@ class VideoGenerator @Inject constructor(
 
                 frameBuffer = FrameBuffer(targetWidth, targetHeight)
 
-                java.io.FileOutputStream(outputFile).use { fos ->
-                    val encoder = AnimatedGifEncoder()
-                    encoder.start(fos)
-                    encoder.setFrameRate(fps)
-                    encoder.setRepeat(0)
-                    encoder.setQuality(10)
+                val delayMs = (1000f / fps).toInt()
+                val encoder = GifEncoder(outputFile.absolutePath, targetWidth, targetHeight, 0)
 
+                try {
                     val datePaint = if (isDateOverlayEnabled) {
                         Paint().apply {
                             color = Color.WHITE
@@ -222,26 +288,28 @@ class VideoGenerator @Inject constructor(
                         }
                     } else null
 
-                    for (photo in photos) {
+                    val cropParamsList = calculateSmoothedCropParams(photos, targetWidth, targetHeight)
+
+                    photos.zip(cropParamsList).forEach { (photo, params) ->
                         currentCoroutineContext().ensureActive()
 
-                        val successLoad = loadBitmapToCanvas(
-                            Uri.parse(photo.originalUri),
-                            frameBuffer,
-                            photo.faceX,
-                            photo.faceY,
-                            photo.faceWidth,
-                            photo.faceHeight
-                        )
+                        if (params != null) {
+                            val successLoad = loadBitmapToCanvas(
+                                Uri.parse(photo.originalUri),
+                                frameBuffer,
+                                params
+                            )
 
-                        if (successLoad) {
-                            if (isDateOverlayEnabled && datePaint != null) {
-                                drawDateOverlay(frameBuffer.bitmap, photo.timestamp, datePaint, dateFormatter)
+                            if (successLoad) {
+                                if (isDateOverlayEnabled && datePaint != null) {
+                                    drawDateOverlay(frameBuffer.bitmap, photo.timestamp, datePaint, dateFormatter)
+                                }
+                                encoder.encodeFrame(frameBuffer.bitmap, delayMs)
                             }
-                            encoder.addFrame(frameBuffer.bitmap)
                         }
                     }
-                    encoder.finish()
+                } finally {
+                    encoder.close()
                 }
                 true
             } catch (e: Exception) {
@@ -271,10 +339,7 @@ class VideoGenerator @Inject constructor(
     private suspend fun loadBitmapToCanvas(
         uri: Uri,
         frameBuffer: FrameBuffer,
-        faceX: Float?,
-        faceY: Float?,
-        faceW: Float?,
-        faceH: Float?
+        cropParams: CropParams
     ): Boolean {
         return try {
              frameBuffer.bitmap.eraseColor(Color.TRANSPARENT)
@@ -284,44 +349,41 @@ class VideoGenerator @Inject constructor(
              val rotatedBitmap = result.bitmap
              val sampleSize = result.sampleSize
 
-             // Calculate scale to cover the target area (CenterCrop)
-             val scale = kotlin.math.max(targetW.toFloat() / rotatedBitmap.width, targetH.toFloat() / rotatedBitmap.height)
+             // params are in Original coordinates.
+             // We need to map them to Loaded coordinates (Original / sampleSize)
+             // and then to Target scale.
 
-             // Calculate virtual scaled dimensions (if we were to scale the whole image)
-             val scaledW = (rotatedBitmap.width * scale)
-             val scaledH = (rotatedBitmap.height * scale)
+             // The cropParams.scale is Target / Original.
+             // We want sScale = Target / Loaded = Target / (Original / SampleSize) = cropParams.scale * sampleSize
+             val sScale = cropParams.scale * sampleSize
 
-             var cropX = (scaledW - targetW) / 2
-             var cropY = (scaledH - targetH) / 2
+             // Center in Original coords
+             val centerX = cropParams.centerX
+             val centerY = cropParams.centerY
 
-             if (faceX != null && faceY != null && faceW != null && faceH != null) {
-                  // Adjust full-resolution face coordinates to the loaded (potentially subsampled) bitmap coordinate system
-                  // faceX (Full) -> faceX / sampleSize (Loaded) -> * scale (Target)
-                  val sFaceX = (faceX / sampleSize) * scale
-                  val sFaceY = (faceY / sampleSize) * scale
-                  val sFaceW = (faceW / sampleSize) * scale
-                  val sFaceH = (faceH / sampleSize) * scale
+             // Center in Loaded coords
+             val loadedCenterX = centerX / sampleSize
+             val loadedCenterY = centerY / sampleSize
 
-                  val faceCenterX = sFaceX + (sFaceW / 2)
-                  val faceCenterY = sFaceY + (sFaceH / 2)
+             // Center in ScaledLoaded coords (pixels in the virtual scaled image)
+             val scaledCenterX = loadedCenterX * sScale
+             val scaledCenterY = loadedCenterY * sScale
 
-                  cropX = (faceCenterX - targetW / 2).coerceIn(0f, scaledW - targetW)
-                  cropY = (faceCenterY - targetH / 2).coerceIn(0f, scaledH - targetH)
-             } else if (faceX != null && faceY != null && faceW != null) {
-                  val sFaceX = (faceX / sampleSize) * scale
-                  val sFaceY = (faceY / sampleSize) * scale
-                  val sFaceW = (faceW / sampleSize) * scale
+             // We want the scaledCenterX to be at targetW/2
+             // The crop rectangle's top-left in ScaledLoaded coords:
+             // cropX = scaledCenterX - targetW/2
+             var cropX = (scaledCenterX - targetW / 2)
+             var cropY = (scaledCenterY - targetH / 2)
 
-                  // Fallback: If faceHeight is missing, assume a square face box (height = width).
-                  val faceCenterX = sFaceX + (sFaceW / 2)
-                  val faceCenterY = sFaceY + (sFaceW / 2)
+             // Dimensions of the full scaled image
+             val scaledW = rotatedBitmap.width * sScale
+             val scaledH = rotatedBitmap.height * sScale
 
-                  cropX = (faceCenterX - targetW / 2).coerceIn(0f, scaledW - targetW)
-                  cropY = (faceCenterY - targetH / 2).coerceIn(0f, scaledH - targetH)
-             }
+             cropX = cropX.coerceIn(0f, scaledW - targetW)
+             cropY = cropY.coerceIn(0f, scaledH - targetH)
 
              frameBuffer.matrix.reset()
-             frameBuffer.matrix.setScale(scale, scale)
+             frameBuffer.matrix.setScale(sScale, sScale)
              frameBuffer.matrix.postTranslate(-cropX, -cropY)
              frameBuffer.canvas.drawBitmap(rotatedBitmap, frameBuffer.matrix, frameBuffer.paint)
              rotatedBitmap.recycle()

@@ -32,12 +32,6 @@ android {
             )
         }
     }
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
-        }
-    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -106,6 +100,9 @@ dependencies {
     // Coil
     implementation(libs.coil.compose)
     implementation(libs.coil.gif)
+
+    // Android Gif Drawable (Native Encoding)
+    implementation("pl.droidsonroids.gif:android-gif-drawable:1.2.28")
 
     // Coroutines
     implementation(libs.kotlinx.coroutines.android)
