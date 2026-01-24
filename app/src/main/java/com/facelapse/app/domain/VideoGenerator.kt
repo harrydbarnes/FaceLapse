@@ -6,21 +6,37 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Matrix
 import android.graphics.Paint
-import android.media.MediaCodec
-import android.media.MediaCodecInfo
-import android.media.MediaFormat
-import android.media.MediaMuxer
 import android.net.Uri
 import android.util.Log
-import androidx.exifinterface.media.ExifInterface
-import com.facelapse.app.data.local.entity.PhotoEntity
+import androidx.media3.common.Effect
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
+import androidx.media3.effect.BitmapOverlay
+import androidx.media3.effect.Crop
+import androidx.media3.effect.OverlayEffect
+import androidx.media3.effect.Presentation
+import androidx.media3.transformer.Composition
+import androidx.media3.transformer.EditedMediaItem
+import androidx.media3.transformer.EditedMediaItemSequence
+import androidx.media3.transformer.Effects
+import androidx.media3.transformer.ExportException
+import androidx.media3.transformer.ExportResult
+import androidx.media3.transformer.Transformer
+import com.facelapse.app.domain.model.Photo
+import com.google.common.collect.ImmutableList
 import dagger.hilt.android.qualifiers.ApplicationContext
+import pl.droidsonroids.gif.GifEncoder
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.math.roundToInt
+import kotlin.coroutines.resume
 
 @Singleton
 class VideoGenerator @Inject constructor(
@@ -28,186 +44,211 @@ class VideoGenerator @Inject constructor(
     private val imageLoader: ImageLoader
 ) {
 
+    private data class CropParams(
+        val centerX: Float,
+        val centerY: Float,
+        val scale: Float,
+        val originalWidth: Int,
+        val originalHeight: Int
+    )
+
+    private suspend fun calculateSmoothedCropParams(
+        photos: List<Photo>,
+        targetWidth: Int,
+        targetHeight: Int
+    ): List<CropParams?> {
+        val rawParams = photos.map { photo ->
+            val dims = imageLoader.getDimensions(Uri.parse(photo.originalUri)) ?: return@map null
+            val (w, h) = dims
+
+            // Base scale to fill screen
+            val minScale = kotlin.math.max(targetWidth.toFloat() / w, targetHeight.toFloat() / h)
+            var scale = minScale
+
+            // Zoom effect (Face Normalization)
+            if (photo.faceWidth != null && photo.faceWidth > 0) {
+                val targetFaceWidth = targetWidth * 0.4f
+                val faceScale = targetFaceWidth / photo.faceWidth
+                scale = kotlin.math.max(minScale, faceScale)
+            }
+
+            var centerX = w / 2f
+            var centerY = h / 2f
+
+            if (photo.faceX != null && photo.faceWidth != null) {
+                val fh = photo.faceHeight ?: photo.faceWidth ?: 0f
+                centerX = photo.faceX + photo.faceWidth / 2f
+                centerY = (photo.faceY ?: 0f) + fh / 2f
+            }
+
+            CropParams(centerX, centerY, scale, w, h)
+        }
+
+        val smoothed = mutableListOf<CropParams?>()
+        var current: CropParams? = null
+
+        for (raw in rawParams) {
+            if (raw == null) {
+                smoothed.add(null)
+                continue
+            }
+
+            if (current == null) {
+                current = raw
+            } else {
+                val smoothX = (raw.centerX * 0.2f) + (current!!.centerX * 0.8f)
+                val smoothY = (raw.centerY * 0.2f) + (current!!.centerY * 0.8f)
+                val smoothScale = (raw.scale * 0.2f) + (current!!.scale * 0.8f)
+                current = CropParams(smoothX, smoothY, smoothScale, raw.originalWidth, raw.originalHeight)
+            }
+            smoothed.add(current)
+        }
+        return smoothed
+    }
+
     suspend fun generateVideo(
-        photos: List<PhotoEntity>,
+        photos: List<Photo>,
         outputFile: File,
         isDateOverlayEnabled: Boolean,
         dateFontSize: Int,
         dateFormat: String,
         targetWidth: Int = 1080,
         targetHeight: Int = 1920,
-        fps: Float = 10f
-    ): Boolean {
-        return withContext(Dispatchers.IO) {
-            var encoder: MediaCodec? = null
-            var mediaMuxer: MediaMuxer? = null
-            var trackIndex = -1
-            var muxerStarted = false
-            var success = false
-            var frameBuffer: FrameBuffer? = null
+        fps: Float = 10f,
+        audioUri: Uri? = null
+    ): Boolean = withContext(Dispatchers.IO) {
+        if (outputFile.exists()) outputFile.delete()
 
-            try {
-                if (outputFile.exists()) outputFile.delete()
+        val dateFormatter = if (isDateOverlayEnabled) {
+             try {
+                 DateTimeFormatter.ofPattern(dateFormat, java.util.Locale.getDefault())
+             } catch (e: Exception) {
+                 Log.w(TAG, "Invalid date format provided: $dateFormat", e)
+                 null
+             }
+        } else null
 
-                // 1. Enforce 16-byte alignment to prevent diagonal shearing
-                val width = roundTo16(targetWidth)
-                val height = roundTo16(targetHeight)
-
-                mediaMuxer = MediaMuxer(outputFile.path, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
-
-                // 2. Setup MediaFormat with standard NV12 (YUV420SemiPlanar)
-                // Note: COLOR_FormatYUV420SemiPlanar is typically NV12 (Y followed by UV interleaved).
-                val mime = MediaFormat.MIMETYPE_VIDEO_AVC
-                val format = MediaFormat.createVideoFormat(mime, width, height)
-
-                format.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420SemiPlanar)
-                format.setInteger(MediaFormat.KEY_BIT_RATE, 6_000_000)
-                format.setFloat(MediaFormat.KEY_FRAME_RATE, fps)
-                format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
-
-                encoder = MediaCodec.createEncoderByType(mime)
-                encoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-                encoder.start()
-
-                // Non-null local references for use in the loop and helper function
-                val localEncoder = encoder!!
-                val localMuxer = mediaMuxer!!
-                val bufferInfo = MediaCodec.BufferInfo()
-
-                // Local function to handle draining the encoder
-                fun drainEncoder(endOfStream: Boolean) {
-                    val timeoutUs = if (endOfStream) 10_000L else 0L
-                    var outputBufferIndex = localEncoder.dequeueOutputBuffer(bufferInfo, timeoutUs)
-
-                    while (outputBufferIndex != MediaCodec.INFO_TRY_AGAIN_LATER) {
-                        if (outputBufferIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
-                            if (muxerStarted) {
-                                throw IllegalStateException("format changed twice")
-                            }
-                            val newFormat = localEncoder.outputFormat
-                            trackIndex = localMuxer.addTrack(newFormat)
-                            localMuxer.start()
-                            muxerStarted = true
-                        } else if (outputBufferIndex >= 0) {
-                            val outputBuffer = localEncoder.getOutputBuffer(outputBufferIndex)
-                            if (outputBuffer != null) {
-                                if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) {
-                                    // The codec config data was pulled out and fed to the muxer when we got
-                                    // the INFO_OUTPUT_FORMAT_CHANGED status. Ignore it.
-                                    bufferInfo.size = 0
-                                }
-
-                                if (bufferInfo.size != 0) {
-                                    if (!muxerStarted) {
-                                        throw IllegalStateException("Muxer not started before writing sample data.")
-                                    }
-                                    outputBuffer.position(bufferInfo.offset)
-                                    outputBuffer.limit(bufferInfo.offset + bufferInfo.size)
-                                    localMuxer.writeSampleData(trackIndex, outputBuffer, bufferInfo)
-                                }
-                            }
-                            localEncoder.releaseOutputBuffer(outputBufferIndex, false)
-                        }
-                        // Ignore other status codes (e.g. INFO_OUTPUT_BUFFERS_CHANGED)
-                        outputBufferIndex = localEncoder.dequeueOutputBuffer(bufferInfo, timeoutUs)
-                    }
-                }
-
-                // 3. Pre-allocate buffer for YUV data (Y size + UV size)
-                val yuvBuffer = ByteArray(width * height * 3 / 2)
-                var presentationTimeUs = 0L
-                val frameDurationUs = (1_000_000.0 / fps).toLong()
-
-                // Pre-allocate buffers and objects to avoid allocation in loop
-                frameBuffer = FrameBuffer(width, height)
-
-                val datePaint = if (isDateOverlayEnabled) {
-                    Paint().apply {
-                        color = Color.WHITE
-                        textSize = if (dateFontSize > 0) dateFontSize.toFloat() else 60f
-                        isAntiAlias = true
-                        setShadowLayer(5f, 0f, 0f, Color.BLACK)
-                        textAlign = Paint.Align.CENTER
-                        alpha = 255
-                    }
-                } else null
-                val dateFormatter = if (isDateOverlayEnabled) {
-                    try {
-                        java.text.SimpleDateFormat(dateFormat, java.util.Locale.getDefault())
-                    } catch (e: Exception) {
-                        null
-                    }
-                } else null
-
-                for (photo in photos) {
-                    if (!isActive()) break
-
-                    // Load and process bitmap directly into reused outBitmap
-                    val successLoad = loadBitmapToCanvas(
-                        Uri.parse(photo.originalUri),
-                        frameBuffer,
-                        photo.faceX,
-                        photo.faceY,
-                        photo.faceWidth,
-                        photo.faceHeight
-                    )
-
-                    if (successLoad) {
-                        if (isDateOverlayEnabled && datePaint != null) {
-                            drawDateOverlay(frameBuffer.bitmap, photo.timestamp, datePaint, dateFormatter)
-                        }
-
-                        // Convert ARGB Bitmap to YUV420SP (NV12)
-                        // Reads pixels directly from Bitmap in native code to avoid copy
-                        encodeYUV420SP(yuvBuffer, frameBuffer.bitmap, width, height)
-
-                        // Feed to Encoder
-                        val inputBufferIndex = localEncoder.dequeueInputBuffer(10_000)
-                        if (inputBufferIndex >= 0) {
-                            localEncoder.getInputBuffer(inputBufferIndex)?.let { inputBuffer ->
-                                inputBuffer.clear()
-                                inputBuffer.put(yuvBuffer)
-                                localEncoder.queueInputBuffer(inputBufferIndex, 0, yuvBuffer.size, presentationTimeUs, 0)
-                                presentationTimeUs += frameDurationUs
-                            }
-                        }
-                        // Do NOT recycle outBitmap here, it is reused
-                    }
-
-                    // Regular Drain
-                    drainEncoder(endOfStream = false)
-                }
-
-                // End of Stream
-                val inputIndex = localEncoder.dequeueInputBuffer(10_000)
-                if (inputIndex >= 0) {
-                    localEncoder.queueInputBuffer(inputIndex, 0, 0, presentationTimeUs, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
-                }
-
-                // Final Drain
-                drainEncoder(endOfStream = true)
-
-                success = true
-            } catch (e: Exception) {
-                Log.e(TAG, "Error generating video", e)
-                success = false
-            } finally {
-                safeCleanup({ encoder?.stop() }, "Error stopping encoder")
-                safeCleanup({ encoder?.release() }, "Error releasing encoder")
-                safeCleanup({
-                    if (muxerStarted) {
-                        mediaMuxer?.stop()
-                    }
-                }, "Error stopping muxer")
-                safeCleanup({ mediaMuxer?.release() }, "Error releasing muxer")
-                frameBuffer?.recycle()
+        val datePaint = if (isDateOverlayEnabled) {
+            Paint().apply {
+                color = Color.WHITE
+                textSize = if (dateFontSize > 0) dateFontSize.toFloat() else 60f
+                isAntiAlias = true
+                setShadowLayer(5f, 0f, 0f, Color.BLACK)
+                textAlign = Paint.Align.CENTER
+                alpha = 255
             }
-            success
+        } else null
+
+        val dateBitmapCache = mutableMapOf<String, Bitmap>()
+        val dateOverlayCache = mutableMapOf<String, OverlayEffect>()
+
+        try {
+            val cropParamsList = calculateSmoothedCropParams(photos, targetWidth, targetHeight)
+
+            val editedMediaItems = photos.zip(cropParamsList).mapNotNull { (photo, params) ->
+                currentCoroutineContext().ensureActive()
+
+                if (params == null) return@mapNotNull null
+
+                val w = params.originalWidth
+                val h = params.originalHeight
+                val scale = params.scale
+                val centerX = params.centerX
+                val centerY = params.centerY
+
+                val cropW = targetWidth / scale
+                val cropH = targetHeight / scale
+
+                val left = (centerX - cropW / 2).coerceIn(0f, w - cropW)
+                val top = (centerY - cropH / 2).coerceIn(0f, h - cropH)
+                val right = left + cropW
+                val bottom = top + cropH
+
+                val ndcLeft = (left / w) * 2 - 1
+                val ndcRight = (right / w) * 2 - 1
+                val ndcTop = 1 - (top / h) * 2
+                val ndcBottom = 1 - (bottom / h) * 2
+
+                // Create Crop effect using NDC coordinates
+                val cropEffect = Crop(ndcLeft, ndcRight, ndcBottom, ndcTop)
+
+                val effects = mutableListOf<Effect>(cropEffect)
+                effects.add(Presentation.createForWidthAndHeight(targetWidth, targetHeight, Presentation.LAYOUT_SCALE_TO_FIT))
+
+                if (isDateOverlayEnabled && dateFormatter != null && datePaint != null) {
+                    val dateString = try {
+                        dateFormatter.format(photo.timestamp)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to format timestamp: ${photo.timestamp}", e)
+                        "Error"
+                    }
+                    val overlayEffect = dateOverlayCache.getOrPut(dateString) {
+                        val dateBitmap = createDateBitmap(dateString, datePaint, targetWidth, targetHeight)
+                        dateBitmapCache[dateString] = dateBitmap
+                        val overlay = BitmapOverlay.createStaticBitmapOverlay(dateBitmap)
+                        OverlayEffect(ImmutableList.copyOf(listOf(overlay)))
+                    }
+                    effects.add(overlayEffect)
+                }
+
+                val durationMs = (1000f / fps).toLong()
+
+                EditedMediaItem.Builder(MediaItem.fromUri(photo.originalUri))
+                    .setDurationUs(durationMs * 1000)
+                    .setEffects(Effects(listOf(), effects.toList()))
+                    .setFrameRate(fps.toInt())
+                    .build()
+            }
+
+            if (editedMediaItems.isEmpty()) {
+                return@withContext false
+            }
+
+            val videoSequence = EditedMediaItemSequence(editedMediaItems)
+            val sequences = mutableListOf(videoSequence)
+
+            if (audioUri != null) {
+                val totalDurationUs = editedMediaItems.sumOf { it.durationUs }
+                val audioItem = EditedMediaItem.Builder(MediaItem.fromUri(audioUri))
+                    .setRemoveVideo(true)
+                    .setDurationUs(totalDurationUs)
+                    .build()
+                sequences.add(EditedMediaItemSequence(ImmutableList.of(audioItem)))
+            }
+
+            val composition = Composition.Builder(sequences).build()
+
+            // Execute Transformer on Main thread as it requires a Looper
+            withContext(Dispatchers.Main) {
+                suspendCancellableCoroutine { continuation ->
+                    val transformer = Transformer.Builder(context)
+                        .setVideoMimeType(MimeTypes.VIDEO_H264)
+                        .addListener(object : Transformer.Listener {
+                            override fun onCompleted(composition: Composition, exportResult: ExportResult) {
+                                continuation.resume(true)
+                            }
+                            override fun onError(composition: Composition, result: ExportResult, exception: ExportException) {
+                                Log.e(TAG, "Export error", exception)
+                                continuation.resume(false)
+                            }
+                        })
+                        .build()
+
+                    transformer.start(composition, outputFile.path)
+
+                    continuation.invokeOnCancellation {
+                        transformer.cancel()
+                    }
+                }
+            }
+        } finally {
+            // Ensure all cached bitmaps are recycled to prevent memory leaks.
+            dateBitmapCache.values.forEach { if (!it.isRecycled) it.recycle() }
         }
     }
 
     suspend fun generateGif(
-        photos: List<PhotoEntity>,
+        photos: List<Photo>,
         outputFile: File,
         isDateOverlayEnabled: Boolean,
         dateFontSize: Int,
@@ -221,16 +262,12 @@ class VideoGenerator @Inject constructor(
             try {
                 if (outputFile.exists()) outputFile.delete()
 
-                // Pre-allocate reused bitmap
                 frameBuffer = FrameBuffer(targetWidth, targetHeight)
 
-                java.io.FileOutputStream(outputFile).use { fos ->
-                    val encoder = AnimatedGifEncoder()
-                    encoder.start(fos)
-                    encoder.setFrameRate(fps)
-                    encoder.setRepeat(0) // 0 = loop indefinitely
-                    encoder.setQuality(10) // default
+                val delayMs = (1000f / fps).toInt()
+                val encoder = GifEncoder(outputFile.absolutePath, targetWidth, targetHeight, 0)
 
+                try {
                     val datePaint = if (isDateOverlayEnabled) {
                         Paint().apply {
                             color = Color.WHITE
@@ -241,35 +278,38 @@ class VideoGenerator @Inject constructor(
                             alpha = 255
                         }
                     } else null
+
                     val dateFormatter = if (isDateOverlayEnabled) {
                         try {
-                            java.text.SimpleDateFormat(dateFormat, java.util.Locale.getDefault())
+                            DateTimeFormatter.ofPattern(dateFormat, java.util.Locale.getDefault())
                         } catch (e: Exception) {
+                            Log.w(TAG, "Invalid date format for GIF: $dateFormat", e)
                             null
                         }
                     } else null
 
-                    for (photo in photos) {
-                        if (!isActive()) break
+                    val cropParamsList = calculateSmoothedCropParams(photos, targetWidth, targetHeight)
 
-                        val successLoad = loadBitmapToCanvas(
-                            Uri.parse(photo.originalUri),
-                            frameBuffer,
-                            photo.faceX,
-                            photo.faceY,
-                            photo.faceWidth,
-                            photo.faceHeight
-                        )
+                    photos.zip(cropParamsList).forEach { (photo, params) ->
+                        currentCoroutineContext().ensureActive()
 
-                        if (successLoad) {
-                            if (isDateOverlayEnabled && datePaint != null) {
-                                drawDateOverlay(frameBuffer.bitmap, photo.timestamp, datePaint, dateFormatter)
+                        if (params != null) {
+                            val successLoad = loadBitmapToCanvas(
+                                Uri.parse(photo.originalUri),
+                                frameBuffer,
+                                params
+                            )
+
+                            if (successLoad) {
+                                if (isDateOverlayEnabled && datePaint != null) {
+                                    drawDateOverlay(frameBuffer.bitmap, photo.timestamp, datePaint, dateFormatter)
+                                }
+                                encoder.encodeFrame(frameBuffer.bitmap, delayMs)
                             }
-                            encoder.addFrame(frameBuffer.bitmap)
-                            // Do NOT recycle outBitmap here
                         }
                     }
-                    encoder.finish()
+                } finally {
+                    encoder.close()
                 }
                 true
             } catch (e: Exception) {
@@ -281,83 +321,71 @@ class VideoGenerator @Inject constructor(
         }
     }
 
-    private fun roundTo16(x: Int): Int {
-        var res = x
-        if (res % 16 != 0) {
-            res = ((x / 16) + 1) * 16
-        }
-        return res
+    private fun createDateBitmap(
+        dateString: String,
+        paint: Paint,
+        width: Int,
+        height: Int
+    ): Bitmap {
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val x = width / 2f
+        // Dynamic Y position: 5% padding from bottom + text height/descent adjustment
+        val y = height - (height * 0.05f) - paint.descent()
+        canvas.drawText(dateString, x, y, paint)
+        return bitmap
     }
 
-    private fun isActive(): Boolean = true
-
-    /**
-     * Loads and renders the bitmap directly onto the provided [frameBuffer].
-     * Avoids intermediate allocations for scaled/cropped bitmaps.
-     */
-    private fun loadBitmapToCanvas(
+    private suspend fun loadBitmapToCanvas(
         uri: Uri,
         frameBuffer: FrameBuffer,
-        faceX: Float?,
-        faceY: Float?,
-        faceW: Float?,
-        faceH: Float?
+        cropParams: CropParams
     ): Boolean {
         return try {
-             // Clear the canvas to avoid artifacts from previous frames if the new image has transparency
              frameBuffer.bitmap.eraseColor(Color.TRANSPARENT)
-
              val targetW = frameBuffer.bitmap.width
              val targetH = frameBuffer.bitmap.height
-
-             // Use optimized loading to reduce memory usage during export
              val result = imageLoader.loadOptimizedBitmap(uri, targetW, targetH) ?: return false
              val rotatedBitmap = result.bitmap
              val sampleSize = result.sampleSize
 
-             // Calculate scale to cover the target area (CenterCrop)
-             val scale = kotlin.math.max(targetW.toFloat() / rotatedBitmap.width, targetH.toFloat() / rotatedBitmap.height)
+             // params are in Original coordinates.
+             // We need to map them to Loaded coordinates (Original / sampleSize)
+             // and then to Target scale.
 
-             // Calculate virtual scaled dimensions (if we were to scale the whole image)
-             val scaledW = (rotatedBitmap.width * scale)
-             val scaledH = (rotatedBitmap.height * scale)
+             // The cropParams.scale is Target / Original.
+             // We want sScale = Target / Loaded = Target / (Original / SampleSize) = cropParams.scale * sampleSize
+             val sScale = cropParams.scale * sampleSize
 
-             var cropX = (scaledW - targetW) / 2
-             var cropY = (scaledH - targetH) / 2
+             // Center in Original coords
+             val centerX = cropParams.centerX
+             val centerY = cropParams.centerY
 
-             if (faceX != null && faceY != null && faceW != null && faceH != null) {
-                  // Adjust full-resolution face coordinates to the loaded (potentially subsampled) bitmap coordinate system
-                  // faceX (Full) -> faceX / sampleSize (Loaded) -> * scale (Target)
-                  val sFaceX = (faceX / sampleSize) * scale
-                  val sFaceY = (faceY / sampleSize) * scale
-                  val sFaceW = (faceW / sampleSize) * scale
-                  val sFaceH = (faceH / sampleSize) * scale
+             // Center in Loaded coords
+             val loadedCenterX = centerX / sampleSize
+             val loadedCenterY = centerY / sampleSize
 
-                  val faceCenterX = sFaceX + (sFaceW / 2)
-                  val faceCenterY = sFaceY + (sFaceH / 2)
+             // Center in ScaledLoaded coords (pixels in the virtual scaled image)
+             val scaledCenterX = loadedCenterX * sScale
+             val scaledCenterY = loadedCenterY * sScale
 
-                  cropX = (faceCenterX - targetW / 2).coerceIn(0f, scaledW - targetW)
-                  cropY = (faceCenterY - targetH / 2).coerceIn(0f, scaledH - targetH)
-             } else if (faceX != null && faceY != null && faceW != null) {
-                  val sFaceX = (faceX / sampleSize) * scale
-                  val sFaceY = (faceY / sampleSize) * scale
-                  val sFaceW = (faceW / sampleSize) * scale
+             // We want the scaledCenterX to be at targetW/2
+             // The crop rectangle's top-left in ScaledLoaded coords:
+             // cropX = scaledCenterX - targetW/2
+             var cropX = (scaledCenterX - targetW / 2)
+             var cropY = (scaledCenterY - targetH / 2)
 
-                  // Fallback: If faceHeight is missing, assume a square face box (height = width).
-                  val faceCenterX = sFaceX + (sFaceW / 2)
-                  val faceCenterY = sFaceY + (sFaceW / 2)
+             // Dimensions of the full scaled image
+             val scaledW = rotatedBitmap.width * sScale
+             val scaledH = rotatedBitmap.height * sScale
 
-                  cropX = (faceCenterX - targetW / 2).coerceIn(0f, scaledW - targetW)
-                  cropY = (faceCenterY - targetH / 2).coerceIn(0f, scaledH - targetH)
-             }
+             cropX = cropX.coerceIn(0f, scaledW - targetW)
+             cropY = cropY.coerceIn(0f, scaledH - targetH)
 
-             // Render directly to outBitmap using reused Matrix
              frameBuffer.matrix.reset()
-             frameBuffer.matrix.setScale(scale, scale)
+             frameBuffer.matrix.setScale(sScale, sScale)
              frameBuffer.matrix.postTranslate(-cropX, -cropY)
-
              frameBuffer.canvas.drawBitmap(rotatedBitmap, frameBuffer.matrix, frameBuffer.paint)
-
              rotatedBitmap.recycle()
              true
         } catch (e: Exception) {
@@ -368,27 +396,20 @@ class VideoGenerator @Inject constructor(
 
     private fun drawDateOverlay(
         bitmap: Bitmap,
-        timestamp: Long,
+        timestamp: LocalDateTime,
         paint: Paint,
-        dateFormat: java.text.SimpleDateFormat?
+        dateFormatter: DateTimeFormatter?
     ) {
         val canvas = Canvas(bitmap)
         val dateString = try {
-            dateFormat?.format(java.util.Date(timestamp)) ?: "Error"
+            dateFormatter?.format(timestamp) ?: "Error"
         } catch (e: Exception) {
+             Log.e(TAG, "Failed to format timestamp for GIF overlay: $timestamp", e)
              "Error"
         }
         val x = bitmap.width / 2f
         val y = bitmap.height - 100f
         canvas.drawText(dateString, x, y, paint)
-    }
-
-    private fun safeCleanup(action: () -> Unit, errorMessage: String) {
-        try {
-            action()
-        } catch (e: Exception) {
-            Log.e(TAG, errorMessage, e)
-        }
     }
 
     private class FrameBuffer(val width: Int, val height: Int) {
@@ -407,29 +428,5 @@ class VideoGenerator @Inject constructor(
 
     companion object {
         private val TAG = VideoGenerator::class.java.simpleName
-        private const val BT601_Y_R = 66
-        private const val BT601_Y_G = 129
-        private const val BT601_Y_B = 25
-        private const val BT601_U_R = -38
-        private const val BT601_U_G = -74
-        private const val BT601_U_B = 112
-        private const val BT601_V_R = 112
-        private const val BT601_V_G = -94
-        private const val BT601_V_B = -18
-
-        // NV12 conversion (YUV 4:2:0 Semi-Planar, U then V)
-        // Made internal/visible for testing
-        // Implemented in native code for performance.
-        @JvmStatic
-        external fun encodeYUV420SP(yuv420sp: ByteArray, bitmap: Bitmap, width: Int, height: Int)
-
-        init {
-            try {
-                System.loadLibrary("yuv_encoder")
-            } catch (e: UnsatisfiedLinkError) {
-                Log.e(TAG, "Native library 'yuv_encoder' failed to load.", e)
-                throw e
-            }
-        }
     }
 }

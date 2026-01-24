@@ -1,27 +1,28 @@
 [versions]
-agp = "8.2.0"
-kotlin = "1.9.23"
-coreKtx = "1.12.0"
+agp = "8.5.0"
+kotlin = "2.0.0"
+coreKtx = "1.13.1"
 junit = "4.13.2"
 junitVersion = "1.1.5"
 espressoCore = "3.5.1"
-lifecycleRuntimeKtx = "2.6.2"
-activityCompose = "1.8.1"
-composeBom = "2024.05.00"
-hilt = "2.48.1"
-ksp = "1.9.23-1.0.20"
+lifecycleRuntimeKtx = "2.8.0"
+activityCompose = "1.9.0"
+composeBom = "2024.09.00"
+hilt = "2.51.1"
+ksp = "2.0.0-1.0.21"
 room = "2.6.1"
-navigationCompose = "2.7.5"
-hiltNavigationCompose = "1.1.0"
-datastore = "1.0.0"
-camerax = "1.3.0"
+navigationCompose = "2.8.0"
+hiltNavigationCompose = "1.2.0"
+datastore = "1.1.1"
+camerax = "1.3.3"
 exifinterface = "1.3.7"
-coil = "2.5.0"
-mlkitFaceDetection = "16.1.5"
-coroutines = "1.7.3"
-material3 = "1.2.1"
-# Add this line
-playServicesTasks = "18.0.2"
+coil = "2.6.0"
+mlkitFaceDetection = "16.1.6"
+coroutines = "1.8.1"
+material3 = "1.3.0"
+playServicesTasks = "18.1.0"
+material3Adaptive = "1.0.0"
+media3 = "1.3.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -38,6 +39,15 @@ androidx-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-toolin
 androidx-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
 androidx-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
 androidx-material3 = { group = "androidx.compose.material3", name = "material3", version.ref = "material3" }
+androidx-material3-adaptive = { group = "androidx.compose.material3.adaptive", name = "adaptive", version.ref = "material3Adaptive" }
+androidx-material3-adaptive-layout = { group = "androidx.compose.material3.adaptive", name = "adaptive-layout", version.ref = "material3Adaptive" }
+androidx-material3-adaptive-navigation = { group = "androidx.compose.material3.adaptive", name = "adaptive-navigation", version.ref = "material3Adaptive" }
+
+# Media3
+androidx-media3-transformer = { group = "androidx.media3", name = "media3-transformer", version.ref = "media3" }
+androidx-media3-effect = { group = "androidx.media3", name = "media3-effect", version.ref = "media3" }
+androidx-media3-common = { group = "androidx.media3", name = "media3-common", version.ref = "media3" }
+androidx-media3-exoplayer = { group = "androidx.media3", name = "media3-exoplayer", version.ref = "media3" }
 
 # Hilt
 hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
@@ -60,7 +70,6 @@ androidx-exifinterface = { group = "androidx.exifinterface", name = "exifinterfa
 
 # ML Kit
 mlkit-face-detection = { group = "com.google.mlkit", name = "face-detection", version.ref = "mlkitFaceDetection" }
-# Add this line
 play-services-tasks = { group = "com.google.android.gms", name = "play-services-tasks", version.ref = "playServicesTasks" }
 
 # Coil
@@ -75,3 +84,4 @@ androidApplication = { id = "com.android.application", version.ref = "agp" }
 kotlinAndroid = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 hiltAndroid = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

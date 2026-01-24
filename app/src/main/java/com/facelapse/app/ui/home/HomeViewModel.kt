@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.facelapse.app.data.repository.ProjectRepository
 import com.facelapse.app.data.repository.SettingsRepository
+import com.facelapse.app.domain.model.Project
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -23,7 +24,7 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    fun deleteProject(project: com.facelapse.app.data.local.entity.ProjectEntity) {
+    fun deleteProject(project: Project) {
         viewModelScope.launch {
             repository.deleteProject(project)
         }
