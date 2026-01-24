@@ -290,7 +290,7 @@ class VideoGenerator @Inject constructor(
 
                     val cropParamsList = calculateSmoothedCropParams(photos, targetWidth, targetHeight)
 
-                    photos.zip(cropParamsList).forEach { (photo, params) ->
+                    for ((photo, params) in photos.zip(cropParamsList)) {
                         currentCoroutineContext().ensureActive()
 
                         if (params != null) {
