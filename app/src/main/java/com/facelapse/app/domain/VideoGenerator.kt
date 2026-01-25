@@ -25,7 +25,7 @@ import androidx.media3.transformer.Transformer
 import com.facelapse.app.domain.model.Photo
 import com.google.common.collect.ImmutableList
 import dagger.hilt.android.qualifiers.ApplicationContext
-import pl.droidsonroids.gif.GifEncoder
+import com.waynejo.androidndkgif.GifEncoder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive

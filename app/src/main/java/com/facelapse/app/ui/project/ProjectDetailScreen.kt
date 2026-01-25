@@ -133,10 +133,11 @@ fun ProjectDetailScreen(
                     }
                 )
             } else {
-                val titleModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && project != null) {
+                val currentProject = project
+                val titleModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && currentProject != null) {
                     with(sharedTransitionScope) {
                          Modifier.sharedElement(
-                             state = rememberSharedContentState(key = "project-title-${project.id}"),
+                             state = rememberSharedContentState(key = "project-title-${currentProject.id}"),
                              animatedVisibilityScope = animatedVisibilityScope
                          )
                     }

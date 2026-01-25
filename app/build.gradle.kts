@@ -62,6 +62,7 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
+    implementation(libs.androidx.material.icons.extended)
 
     // Adaptive
     implementation(libs.androidx.material3.adaptive)
@@ -104,6 +105,7 @@ dependencies {
 
     // Android Gif Drawable (Native Encoding)
     implementation("pl.droidsonroids.gif:android-gif-drawable:1.2.28")
+    implementation(libs.androidndkgif)
 
     // Coroutines
     implementation(libs.kotlinx.coroutines.android)
