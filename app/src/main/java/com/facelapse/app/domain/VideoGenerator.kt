@@ -25,7 +25,7 @@ import androidx.media3.transformer.Transformer
 import com.facelapse.app.domain.model.Photo
 import com.google.common.collect.ImmutableList
 import dagger.hilt.android.qualifiers.ApplicationContext
-import pl.droidsonroids.gif.GifEncoder
+import com.waynejo.androidndkgif.GifEncoder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -265,7 +265,13 @@ class VideoGenerator @Inject constructor(
                 frameBuffer = FrameBuffer(targetWidth, targetHeight)
 
                 val delayMs = (1000f / fps).toInt()
-                val encoder = GifEncoder(outputFile.absolutePath, targetWidth, targetHeight, 0)
+                val encoder = GifEncoder()
+                encoder.init(
+                    targetWidth,
+                    targetHeight,
+                    outputFile.absolutePath,
+                    GifEncoder.EncodingType.ENCODING_TYPE_NORMAL_LOW_MEMORY
+                )
 
                 try {
                     val datePaint = if (isDateOverlayEnabled) {
@@ -290,7 +296,7 @@ class VideoGenerator @Inject constructor(
 
                     val cropParamsList = calculateSmoothedCropParams(photos, targetWidth, targetHeight)
 
-                    photos.zip(cropParamsList).forEach { (photo, params) ->
+                    for ((photo, params) in photos.zip(cropParamsList)) {
                         currentCoroutineContext().ensureActive()
 
                         if (params != null) {

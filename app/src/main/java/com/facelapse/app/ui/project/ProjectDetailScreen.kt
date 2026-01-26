@@ -26,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
@@ -133,10 +134,11 @@ fun ProjectDetailScreen(
                     }
                 )
             } else {
-                val titleModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && project != null) {
+                val currentProject = project
+                val titleModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && currentProject != null) {
                     with(sharedTransitionScope) {
                          Modifier.sharedElement(
-                             state = rememberSharedContentState(key = "project-title-${project.id}"),
+                             state = rememberSharedContentState(key = "project-title-${currentProject.id}"),
                              animatedVisibilityScope = animatedVisibilityScope
                          )
                     }
