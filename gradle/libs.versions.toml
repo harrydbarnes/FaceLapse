@@ -81,7 +81,7 @@ coil-gif = { group = "io.coil-kt", name = "coil-gif", version.ref = "coil" }
 # Coroutines
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 
-androidndkgif = { group = "com.waynejo", name = "androidndkgif", version = "1.0.1" }
+androidndkgif = { group = "io.github.waynejo", name = "androidndkgif", version = "1.0.1" }
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }

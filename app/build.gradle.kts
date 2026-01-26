@@ -104,7 +104,6 @@ dependencies {
     implementation(libs.coil.gif)
 
     // Android Gif Drawable (Native Encoding)
-    implementation("pl.droidsonroids.gif:android-gif-drawable:1.2.28")
     implementation(libs.androidndkgif)
 
     // Coroutines
