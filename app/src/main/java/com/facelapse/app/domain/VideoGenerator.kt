@@ -265,7 +265,13 @@ class VideoGenerator @Inject constructor(
                 frameBuffer = FrameBuffer(targetWidth, targetHeight)
 
                 val delayMs = (1000f / fps).toInt()
-                val encoder = GifEncoder(outputFile.absolutePath, targetWidth, targetHeight, 0)
+                val encoder = GifEncoder()
+                encoder.init(
+                    targetWidth,
+                    targetHeight,
+                    outputFile.absolutePath,
+                    GifEncoder.EncodingType.ENCODING_TYPE_NORMAL_LOW_MEMORY
+                )
 
                 try {
                     val datePaint = if (isDateOverlayEnabled) {
