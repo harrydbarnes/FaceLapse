@@ -34,6 +34,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.async
@@ -259,10 +260,12 @@ class ProjectViewModel @Inject constructor(
 
     private suspend fun processFacesWithTarget(photos: List<Photo>, targetEmbedding: FloatArray) {
         withContext(Dispatchers.IO) {
+            val semaphore = kotlinx.coroutines.sync.Semaphore(4)
             val jobs = photos.map { photo ->
                 async {
-                    val loaded = imageLoader.loadOptimizedBitmap(Uri.parse(photo.originalUri), 1024, 1024)
-                    if (loaded != null) {
+                    semaphore.withPermit {
+                        val loaded = imageLoader.loadOptimizedBitmap(Uri.parse(photo.originalUri), 1024, 1024)
+                        if (loaded != null) {
                         try {
                             val result = faceDetectorHelper.detectFaces(loaded.bitmap)
                             val faces = result.faces
@@ -306,6 +309,7 @@ class ProjectViewModel @Inject constructor(
                     } else {
                         // Failed to load, keep as unprocessed
                         repository.updatePhoto(photo.copy(isProcessed = false))
+                    }
                     }
                 }
             }
@@ -375,7 +379,7 @@ class ProjectViewModel @Inject constructor(
                     )
                 } else {
                     if (!photo.isProcessed) {
-                        repository.updatePhoto(photo.copy(isProcessed = true))
+                        repository.updatePhoto(photo.copy(isProcessed = false))
                     }
                 }
             }
@@ -543,6 +547,13 @@ class ProjectViewModel @Inject constructor(
     fun deletePhoto(photo: Photo) {
         viewModelScope.launch {
             repository.deletePhoto(photo)
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        viewModelScope.launch {
+            faceRecognitionHelper.close()
         }
     }
 }

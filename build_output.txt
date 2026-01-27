@@ -34,11 +34,16 @@ Configuration on demand is an incubating feature.
 > Task :app:writeDebugSigningConfigVersions UP-TO-DATE
 > Task :app:kspDebugKotlin
 
-> Task :app:compileDebugKotlin
-e: file:///app/app/src/main/java/com/facelapse/app/ui/project/ProjectViewModel.kt:246:71 Unresolved reference 'stringToEmbedding'.
-e: file:///app/app/src/main/java/com/facelapse/app/ui/project/ProjectViewModel.kt:270:104 Argument type mismatch: actual type is 'kotlin.Any', but 'kotlin.FloatArray' was expected.
-
 > Task :app:compileDebugKotlin FAILED
+e: file:///app/app/src/main/java/com/facelapse/app/ui/project/ProjectViewModel.kt:265:31 Unresolved reference 'withPermit'.
+e: file:///app/app/src/main/java/com/facelapse/app/ui/project/ProjectViewModel.kt:266:50 Suspension functions can only be called within coroutine body.
+e: file:///app/app/src/main/java/com/facelapse/app/ui/project/ProjectViewModel.kt:269:61 Suspension functions can only be called within coroutine body.
+e: file:///app/app/src/main/java/com/facelapse/app/ui/project/ProjectViewModel.kt:273:44 Suspension functions can only be called within coroutine body.
+e: file:///app/app/src/main/java/com/facelapse/app/ui/project/ProjectViewModel.kt:274:33 'return' is prohibited here.
+e: file:///app/app/src/main/java/com/facelapse/app/ui/project/ProjectViewModel.kt:281:67 Suspension functions can only be called within coroutine body.
+e: file:///app/app/src/main/java/com/facelapse/app/ui/project/ProjectViewModel.kt:301:44 Suspension functions can only be called within coroutine body.
+e: file:///app/app/src/main/java/com/facelapse/app/ui/project/ProjectViewModel.kt:303:44 Suspension functions can only be called within coroutine body.
+e: file:///app/app/src/main/java/com/facelapse/app/ui/project/ProjectViewModel.kt:310:36 Suspension functions can only be called within coroutine body.
 
 FAILURE: Build failed with an exception.
 
@@ -53,5 +58,5 @@ Execution failed for task ':app:compileDebugKotlin'.
 > Run with --scan to get full insights.
 > Get more help at https://help.gradle.org.
 
-BUILD FAILED in 44s
+BUILD FAILED in 24s
 29 actionable tasks: 2 executed, 27 up-to-date
