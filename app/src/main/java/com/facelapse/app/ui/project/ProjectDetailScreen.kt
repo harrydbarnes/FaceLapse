@@ -163,7 +163,7 @@ fun ProjectDetailScreen(
                     actions = {
                         // Standard Top Bar Actions
                         val isTargetSet = project?.targetEmbedding != null
-                        ActionTooltip(tooltip = if (isTargetSet) "Re-align (Smart)" else stringResource(R.string.action_align_faces)) {
+                        ActionTooltip(tooltip = stringResource(if (isTargetSet) R.string.action_re_align_smart else R.string.action_align_faces)) {
                             IconButton(
                                 onClick = { viewModel.processFaces() },
                                 enabled = !isProcessing && photos.isNotEmpty()
