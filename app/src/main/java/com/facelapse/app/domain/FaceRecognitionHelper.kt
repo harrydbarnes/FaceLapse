@@ -23,6 +23,7 @@ class FaceRecognitionHelper @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     private var interpreter: Interpreter? = null
+    private var gpuDelegate: GpuDelegate? = null
     private val mutex = Mutex()
 
     companion object {
@@ -39,7 +40,8 @@ class FaceRecognitionHelper @Inject constructor(
             try {
                 val options = Interpreter.Options()
                 if (CompatibilityList().isDelegateSupportedOnThisDevice) {
-                    options.addDelegate(GpuDelegate())
+                    gpuDelegate = GpuDelegate()
+                    options.addDelegate(gpuDelegate)
                 } else {
                     options.setNumThreads(4)
                 }
@@ -105,5 +107,12 @@ class FaceRecognitionHelper @Inject constructor(
         }
         val mag = (sqrt(mag1) * sqrt(mag2))
         return if (mag > 0) dot / mag else 0f
+    }
+
+    fun close() {
+        interpreter?.close()
+        interpreter = null
+        gpuDelegate?.close()
+        gpuDelegate = null
     }
 }
