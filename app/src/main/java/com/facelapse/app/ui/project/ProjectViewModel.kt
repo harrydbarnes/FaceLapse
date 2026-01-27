@@ -211,12 +211,10 @@ class ProjectViewModel @Inject constructor(
                             if (embedding != null) {
                                 val id = projectId
                                 if (id == null) {
-                                    _isProcessing.value = false
                                     return@withContext
                                 }
                                 val currentProject = repository.getProject(id)
                                 if (currentProject == null) {
-                                    _isProcessing.value = false
                                     return@withContext
                                 }
                                 repository.updateProject(currentProject.copy(targetEmbedding = embedding))
