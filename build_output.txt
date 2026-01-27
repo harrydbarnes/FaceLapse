@@ -5,17 +5,14 @@ Configuration on demand is an incubating feature.
 > Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
 > Task :app:checkDebugAarMetadata UP-TO-DATE
 > Task :app:generateDebugResValues UP-TO-DATE
-> Task :app:mapDebugSourceSetPaths UP-TO-DATE
-> Task :app:generateDebugResources UP-TO-DATE
-> Task :app:mergeDebugResources UP-TO-DATE
-> Task :app:packageDebugResources UP-TO-DATE
-> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths
+> Task :app:generateDebugResources
+> Task :app:packageDebugResources
 > Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
 > Task :app:extractDeepLinksDebug UP-TO-DATE
 > Task :app:processDebugMainManifest UP-TO-DATE
 > Task :app:processDebugManifest UP-TO-DATE
 > Task :app:processDebugManifestForPackage UP-TO-DATE
-> Task :app:processDebugResources UP-TO-DATE
 > Task :app:javaPreCompileDebug UP-TO-DATE
 > Task :app:mergeDebugShaders UP-TO-DATE
 > Task :app:compileDebugShaders NO-SOURCE
@@ -24,6 +21,7 @@ Configuration on demand is an incubating feature.
 > Task :app:compressDebugAssets UP-TO-DATE
 > Task :app:desugarDebugFileDependencies UP-TO-DATE
 > Task :app:checkDebugDuplicateClasses UP-TO-DATE
+> Task :app:parseDebugLocalResources
 > Task :app:mergeExtDexDebug UP-TO-DATE
 > Task :app:mergeLibDexDebug UP-TO-DATE
 > Task :app:mergeDebugJniLibFolders UP-TO-DATE
@@ -32,31 +30,22 @@ Configuration on demand is an incubating feature.
 > Task :app:validateSigningDebug UP-TO-DATE
 > Task :app:writeDebugAppMetadata UP-TO-DATE
 > Task :app:writeDebugSigningConfigVersions UP-TO-DATE
+> Task :app:mergeDebugResources
+> Task :app:processDebugResources
 > Task :app:kspDebugKotlin
+> Task :app:compileDebugKotlin
+> Task :app:compileDebugJavaWithJavac
+> Task :app:hiltAggregateDepsDebug UP-TO-DATE
+> Task :app:hiltJavaCompileDebug
+> Task :app:processDebugJavaRes UP-TO-DATE
+> Task :app:mergeDebugJavaResource UP-TO-DATE
+> Task :app:transformDebugClassesWithAsm
+> Task :app:dexBuilderDebug
+> Task :app:mergeDebugGlobalSynthetics UP-TO-DATE
+> Task :app:mergeProjectDexDebug
+> Task :app:packageDebug
+> Task :app:createDebugApkListingFileRedirect UP-TO-DATE
+> Task :app:assembleDebug
 
-> Task :app:compileDebugKotlin FAILED
-e: file:///app/app/src/main/java/com/facelapse/app/ui/project/ProjectViewModel.kt:265:31 Unresolved reference 'withPermit'.
-e: file:///app/app/src/main/java/com/facelapse/app/ui/project/ProjectViewModel.kt:266:50 Suspension functions can only be called within coroutine body.
-e: file:///app/app/src/main/java/com/facelapse/app/ui/project/ProjectViewModel.kt:269:61 Suspension functions can only be called within coroutine body.
-e: file:///app/app/src/main/java/com/facelapse/app/ui/project/ProjectViewModel.kt:273:44 Suspension functions can only be called within coroutine body.
-e: file:///app/app/src/main/java/com/facelapse/app/ui/project/ProjectViewModel.kt:274:33 'return' is prohibited here.
-e: file:///app/app/src/main/java/com/facelapse/app/ui/project/ProjectViewModel.kt:281:67 Suspension functions can only be called within coroutine body.
-e: file:///app/app/src/main/java/com/facelapse/app/ui/project/ProjectViewModel.kt:301:44 Suspension functions can only be called within coroutine body.
-e: file:///app/app/src/main/java/com/facelapse/app/ui/project/ProjectViewModel.kt:303:44 Suspension functions can only be called within coroutine body.
-e: file:///app/app/src/main/java/com/facelapse/app/ui/project/ProjectViewModel.kt:310:36 Suspension functions can only be called within coroutine body.
-
-FAILURE: Build failed with an exception.
-
-* What went wrong:
-Execution failed for task ':app:compileDebugKotlin'.
-> A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
-   > Compilation error. See log for more details
-
-* Try:
-> Run with --stacktrace option to get the stack trace.
-> Run with --info or --debug option to get more log output.
-> Run with --scan to get full insights.
-> Get more help at https://help.gradle.org.
-
-BUILD FAILED in 24s
-29 actionable tasks: 2 executed, 27 up-to-date
+BUILD SUCCESSFUL in 1m 42s
+40 actionable tasks: 14 executed, 26 up-to-date

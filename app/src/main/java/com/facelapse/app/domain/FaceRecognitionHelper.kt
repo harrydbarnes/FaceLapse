@@ -28,6 +28,7 @@ class FaceRecognitionHelper @Inject constructor(
         private const val MODEL_FILENAME = "mobilefacenet.tflite"
         private const val INPUT_SIZE = 112
         private const val OUTPUT_SIZE = 192
+        private const val NUM_CPU_THREADS = 4
         // Threshold is used by consumer, but defined here as per requirements
         const val THRESHOLD = 0.6f
     }

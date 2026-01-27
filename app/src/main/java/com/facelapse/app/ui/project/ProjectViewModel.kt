@@ -60,6 +60,7 @@ class ProjectViewModel @Inject constructor(
         private val filenameTimestampFormatter = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")
         private val SAFE_FILENAME_REGEX = Regex("[^a-zA-Z0-9.-]")
         private const val GIF_SAFE_SHORTEST_SIDE_PX = 480f
+        private const val MAX_CONCURRENT_FACE_PROCESSING = 4
     }
 
     private val _projectId = MutableStateFlow<String?>(null)
@@ -211,10 +212,12 @@ class ProjectViewModel @Inject constructor(
                             if (embedding != null) {
                                 val id = projectId
                                 if (id == null) {
+                                    _isProcessing.value = false
                                     return@withContext
                                 }
                                 val currentProject = repository.getProject(id)
                                 if (currentProject == null) {
+                                    _isProcessing.value = false
                                     return@withContext
                                 }
                                 repository.updateProject(currentProject.copy(targetEmbedding = embedding))
@@ -240,8 +243,12 @@ class ProjectViewModel @Inject constructor(
     }
 
     private suspend fun processFacesInternal() {
-        val id = projectId ?: return
         _isProcessing.value = true
+        val id = projectId
+        if (id == null) {
+            _isProcessing.value = false
+            return
+        }
 
         withContext(Dispatchers.Default) {
             try {
