@@ -56,6 +56,7 @@ class ProjectViewModel @Inject constructor(
     companion object {
         private val filenameTimestampFormatter = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")
         private val SAFE_FILENAME_REGEX = Regex("[^a-zA-Z0-9.-]")
+        private const val GIF_SAFE_SHORTEST_SIDE_PX = 480f
     }
 
     private val _projectId = MutableStateFlow<String?>(null)
@@ -370,7 +371,7 @@ class ProjectViewModel @Inject constructor(
 
             val fullDims = Project.getDimensionsForAspectRatio(project.aspectRatio)
             val (targetWidth, targetHeight) = if (project.exportAsGif) {
-                val scale = 480f / kotlin.math.min(fullDims.first, fullDims.second)
+                val scale = GIF_SAFE_SHORTEST_SIDE_PX / kotlin.math.min(fullDims.first, fullDims.second)
                 (fullDims.first * scale).toInt() to (fullDims.second * scale).toInt()
             } else {
                 fullDims
