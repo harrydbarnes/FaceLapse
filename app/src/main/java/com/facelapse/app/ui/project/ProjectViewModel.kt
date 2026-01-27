@@ -368,12 +368,7 @@ class ProjectViewModel @Inject constructor(
             val mimeType: String
             val generator: suspend (File) -> Boolean
 
-            val (targetWidth, targetHeight) = when (project.aspectRatio) {
-                "16:9" -> 1920 to 1080
-                "1:1" -> 1080 to 1080
-                "4:5" -> 1080 to 1350
-                else -> 1080 to 1920 // Default 9:16
-            }
+            val (targetWidth, targetHeight) = Project.getDimensionsForAspectRatio(project.aspectRatio)
 
             if (project.exportAsGif) {
                 extension = "gif"

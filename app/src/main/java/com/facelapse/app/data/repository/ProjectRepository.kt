@@ -35,8 +35,8 @@ class ProjectRepository @Inject constructor(
             exportAsGif = exportAsGif,
             createdAt = createdAt,
             isDateOverlayEnabled = true,
-            faceScale = 0.4f,
-            aspectRatio = "9:16"
+            faceScale = Project.DEFAULT_FACE_SCALE,
+            aspectRatio = Project.DEFAULT_ASPECT_RATIO
         ).toEntity())
     }
 

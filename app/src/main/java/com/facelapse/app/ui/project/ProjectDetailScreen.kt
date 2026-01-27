@@ -424,7 +424,7 @@ fun ProjectSettingsDialog(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        listOf("9:16", "1:1", "16:9", "4:5").forEach { ratio ->
+                        Project.SUPPORTED_ASPECT_RATIOS.forEach { ratio ->
                             FilterChip(
                                 selected = (aspectRatio == ratio),
                                 onClick = { aspectRatio = ratio },

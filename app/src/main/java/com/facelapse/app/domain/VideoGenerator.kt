@@ -23,6 +23,7 @@ import androidx.media3.transformer.ExportException
 import androidx.media3.transformer.ExportResult
 import androidx.media3.transformer.Transformer
 import com.facelapse.app.domain.model.Photo
+import com.facelapse.app.domain.model.Project
 import com.google.common.collect.ImmutableList
 import dagger.hilt.android.qualifiers.ApplicationContext
 import com.waynejo.androidndkgif.GifEncoder
@@ -117,7 +118,7 @@ class VideoGenerator @Inject constructor(
         targetHeight: Int = 1920,
         fps: Float = 10f,
         audioUri: Uri? = null,
-        faceScale: Float = 0.4f
+        faceScale: Float = Project.DEFAULT_FACE_SCALE
     ): Boolean = withContext(Dispatchers.IO) {
         if (outputFile.exists()) outputFile.delete()
 
@@ -258,7 +259,7 @@ class VideoGenerator @Inject constructor(
         targetWidth: Int = 480,
         targetHeight: Int = 854,
         fps: Float = 10f,
-        faceScale: Float = 0.4f
+        faceScale: Float = Project.DEFAULT_FACE_SCALE
     ): Boolean {
         return withContext(Dispatchers.IO) {
             var frameBuffer: FrameBuffer? = null
