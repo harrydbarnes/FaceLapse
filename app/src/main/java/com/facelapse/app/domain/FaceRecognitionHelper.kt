@@ -41,7 +41,7 @@ class FaceRecognitionHelper @Inject constructor(
                     gpuDelegate = GpuDelegate()
                     options.addDelegate(gpuDelegate)
                 } else {
-                    options.setNumThreads(4)
+                    options.setNumThreads(NUM_CPU_THREADS)
                 }
 
                 val modelFile = FileUtil.loadMappedFile(context, MODEL_FILENAME)
