@@ -209,8 +209,16 @@ class ProjectViewModel @Inject constructor(
                         try {
                             val embedding = faceRecognitionHelper.getFaceEmbedding(loaded.bitmap, face)
                             if (embedding != null) {
-                                val id = projectId ?: return@withContext
-                                val currentProject = repository.getProject(id) ?: return@withContext
+                                val id = projectId
+                                if (id == null) {
+                                    _isProcessing.value = false
+                                    return@withContext
+                                }
+                                val currentProject = repository.getProject(id)
+                                if (currentProject == null) {
+                                    _isProcessing.value = false
+                                    return@withContext
+                                }
                                 repository.updateProject(currentProject.copy(targetEmbedding = embedding))
                                 processFacesInternal()
                             }
@@ -272,7 +280,7 @@ class ProjectViewModel @Inject constructor(
                             val faces = result.faces
 
                             if (result.width == 0 || result.height == 0) {
-                                repository.updatePhoto(photo.copy(isProcessed = true))
+                                repository.updatePhoto(photo.copy(isProcessed = false))
                                 return@async
                             }
 
@@ -330,7 +338,7 @@ class ProjectViewModel @Inject constructor(
             val height = result.height
 
             if (width == 0 || height == 0) {
-                repository.updatePhoto(photo.copy(isProcessed = true))
+                repository.updatePhoto(photo.copy(isProcessed = false))
                 continue
             }
             if (photo.isProcessed) {
@@ -555,7 +563,7 @@ class ProjectViewModel @Inject constructor(
 
     override fun onCleared() {
         super.onCleared()
-        viewModelScope.launch {
+        kotlinx.coroutines.runBlocking {
             faceRecognitionHelper.close()
         }
     }

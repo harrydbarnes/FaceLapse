@@ -53,8 +53,10 @@ class FaceRecognitionHelper @Inject constructor(
     }
 
     suspend fun getFaceEmbedding(bitmap: Bitmap, face: Face): FloatArray? {
-         if (interpreter == null) init()
-         if (interpreter == null) return null
+         if (interpreter == null) {
+             init()
+             if (interpreter == null) return null
+         }
 
          return mutex.withLock {
              var cropped: Bitmap? = null
