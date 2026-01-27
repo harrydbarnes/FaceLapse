@@ -30,8 +30,7 @@ data class Project(
                 RATIO_16_9 -> 1920 to 1080
                 RATIO_1_1 -> 1080 to 1080
                 RATIO_4_5 -> 1080 to 1350
-                RATIO_9_16 -> 1080 to 1920
-                else -> 1080 to 1920 // Default 9:16
+                else -> 1080 to 1920 // Default 9:16 covers RATIO_9_16
             }
         }
     }
