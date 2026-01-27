@@ -242,12 +242,8 @@ class ProjectViewModel @Inject constructor(
     }
 
     private suspend fun processFacesInternal() {
+        val id = projectId ?: return
         _isProcessing.value = true
-        val id = projectId
-        if (id == null) {
-            _isProcessing.value = false
-            return
-        }
 
         withContext(Dispatchers.Default) {
             try {
