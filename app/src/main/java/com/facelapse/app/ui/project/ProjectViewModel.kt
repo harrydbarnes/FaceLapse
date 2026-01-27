@@ -258,6 +258,54 @@ class ProjectViewModel @Inject constructor(
                 var previousFaceCenter: PointF? = null
 
                 currentPhotos.forEach { photo ->
+                if (targetEmbedding != null) {
+                    val loaded = imageLoader.loadOptimizedBitmap(Uri.parse(photo.originalUri), 1024, 1024)
+                    if (loaded != null) {
+                        try {
+                            val result = faceDetectorHelper.detectFaces(loaded.bitmap)
+                            val faces = result.faces
+
+                            if (result.width == 0 || result.height == 0) {
+                                repository.updatePhoto(photo.copy(isProcessed = true))
+                                return@forEach
+                            }
+
+                            var bestCandidate: Face? = null
+                            var bestScore = -1f
+
+                            for (face in faces) {
+                                val embed = faceRecognitionHelper.getFaceEmbedding(loaded.bitmap, face)
+                                if (embed != null) {
+                                    val score = faceRecognitionHelper.calculateCosineSimilarity(embed, targetEmbedding)
+                                    if (score > bestScore) {
+                                        bestScore = score
+                                        bestCandidate = face
+                                        }
+                                    }
+                            }
+
+                            val bestFace = if (bestScore > FaceRecognitionHelper.THRESHOLD) bestCandidate else null
+
+                            if (bestFace != null) {
+                                val updatedPhoto = photo.copy(
+                                    isProcessed = true,
+                                    faceX = bestFace.boundingBox.left.toFloat(),
+                                    faceY = bestFace.boundingBox.top.toFloat(),
+                                    faceWidth = bestFace.boundingBox.width().toFloat(),
+                                    faceHeight = bestFace.boundingBox.height().toFloat()
+                                )
+                                repository.updatePhoto(updatedPhoto)
+                            } else {
+                                repository.updatePhoto(photo.copy(isProcessed = false))
+                                }
+                        } finally {
+                            if (!loaded.bitmap.isRecycled) loaded.bitmap.recycle()
+                        }
+                    } else {
+                        // Failed to load
+                        repository.updatePhoto(photo.copy(isProcessed = true))
+                        }
+                    } else {
                     val result = faceDetectorHelper.detectFaces(Uri.parse(photo.originalUri))
                     val faces = result.faces
                     val width = result.width
@@ -267,34 +315,6 @@ class ProjectViewModel @Inject constructor(
                         repository.updatePhoto(photo.copy(isProcessed = true))
                         return@forEach
                     }
-
-                    val bestFace = if (targetEmbedding != null) {
-                        if (faces.isEmpty()) null
-                        else {
-                            val loaded = imageLoader.loadOptimizedBitmap(Uri.parse(photo.originalUri), 1024, 1024)
-                            if (loaded != null) {
-                                try {
-                                    var bestCandidate: Face? = null
-                                    var bestScore = -1f
-
-                                    for (face in faces) {
-                                        val embed = faceRecognitionHelper.getFaceEmbedding(loaded.bitmap, face)
-                                        if (embed != null) {
-                                            val score = faceRecognitionHelper.calculateCosineSimilarity(embed, targetEmbedding)
-                                            if (score > bestScore) {
-                                                bestScore = score
-                                                bestCandidate = face
-                                            }
-                                        }
-                                    }
-
-                                    if (bestScore > FaceRecognitionHelper.THRESHOLD) bestCandidate else null
-                                } finally {
-                                    if (!loaded.bitmap.isRecycled) loaded.bitmap.recycle()
-                                }
-                            } else null
-                        }
-                    } else {
                     if (photo.isProcessed) {
                         val fx = photo.faceX
                         val fy = photo.faceY
@@ -306,9 +326,8 @@ class ProjectViewModel @Inject constructor(
                         } else {
                             null
                         }
-                        null
                     } else {
-                        if (previousFaceCenter == null) {
+                        val bestFace = if (previousFaceCenter == null) {
                             faces.maxByOrNull { it.boundingBox.width() * it.boundingBox.height() }
                         } else {
                             val prevCenter = checkNotNull(previousFaceCenter)
@@ -324,44 +343,29 @@ class ProjectViewModel @Inject constructor(
                                 hypot(center.x - prevCenter.x, center.y - prevCenter.y)
                             }
                         }
-                    }
-                }
 
-                if (targetEmbedding != null) {
-                    if (bestFace != null) {
-                        val updatedPhoto = photo.copy(
-                            isProcessed = true,
-                            faceX = bestFace.boundingBox.left.toFloat(),
-                            faceY = bestFace.boundingBox.top.toFloat(),
-                            faceWidth = bestFace.boundingBox.width().toFloat(),
-                            faceHeight = bestFace.boundingBox.height().toFloat()
-                        )
-                        repository.updatePhoto(updatedPhoto)
-                    } else {
-                         repository.updatePhoto(photo.copy(isProcessed = false))
-                    }
-                } else {
-                    if (bestFace != null) {
-                        val updatedPhoto = photo.copy(
-                            isProcessed = true,
-                            faceX = bestFace.boundingBox.left.toFloat(),
-                            faceY = bestFace.boundingBox.top.toFloat(),
-                            faceWidth = bestFace.boundingBox.width().toFloat(),
-                            faceHeight = bestFace.boundingBox.height().toFloat()
-                        )
-                        repository.updatePhoto(updatedPhoto)
+                        if (bestFace != null) {
+                            val updatedPhoto = photo.copy(
+                                isProcessed = true,
+                                faceX = bestFace.boundingBox.left.toFloat(),
+                                faceY = bestFace.boundingBox.top.toFloat(),
+                                faceWidth = bestFace.boundingBox.width().toFloat(),
+                                faceHeight = bestFace.boundingBox.height().toFloat()
+                            )
+                            repository.updatePhoto(updatedPhoto)
 
-                        previousFaceCenter = calculateNormalizedCenter(
-                            bestFace.boundingBox.left.toFloat(),
-                            bestFace.boundingBox.top.toFloat(),
-                            bestFace.boundingBox.width().toFloat(),
-                            bestFace.boundingBox.height().toFloat(),
-                            width,
-                            height
-                        )
-                    } else {
-                        if (!photo.isProcessed) {
-                            repository.updatePhoto(photo.copy(isProcessed = true))
+                            previousFaceCenter = calculateNormalizedCenter(
+                                bestFace.boundingBox.left.toFloat(),
+                                bestFace.boundingBox.top.toFloat(),
+                                bestFace.boundingBox.width().toFloat(),
+                                bestFace.boundingBox.height().toFloat(),
+                                width,
+                                height
+                            )
+                        } else {
+                            if (!photo.isProcessed) {
+                                repository.updatePhoto(photo.copy(isProcessed = true))
+                            }
                         }
                     }
                 }

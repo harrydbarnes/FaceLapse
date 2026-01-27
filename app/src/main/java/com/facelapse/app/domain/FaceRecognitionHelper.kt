@@ -47,7 +47,7 @@ class FaceRecognitionHelper @Inject constructor(
                 val modelFile = FileUtil.loadMappedFile(context, MODEL_FILENAME)
                 interpreter = Interpreter(modelFile, options)
             } catch (e: Exception) {
-                e.printStackTrace()
+                android.util.Log.e("FaceRecognitionHelper", "Error initializing TFLite", e)
             }
         }
     }
@@ -83,7 +83,7 @@ class FaceRecognitionHelper @Inject constructor(
 
                 outputArray[0]
              } catch (e: Exception) {
-                 e.printStackTrace()
+                 android.util.Log.e("FaceRecognitionHelper", "Error getting embedding", e)
                  null
              } finally {
                  if (cropped != null && !cropped.isRecycled) {
