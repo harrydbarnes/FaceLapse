@@ -263,7 +263,8 @@ class ProjectViewModel @Inject constructor(
             val semaphore = kotlinx.coroutines.sync.Semaphore(4)
             val jobs = photos.map { photo ->
                 async {
-                    semaphore.withPermit {
+                    semaphore.acquire()
+                    try {
                         val loaded = imageLoader.loadOptimizedBitmap(Uri.parse(photo.originalUri), 1024, 1024)
                         if (loaded != null) {
                         try {
@@ -310,6 +311,8 @@ class ProjectViewModel @Inject constructor(
                         // Failed to load, keep as unprocessed
                         repository.updatePhoto(photo.copy(isProcessed = false))
                     }
+                    } finally {
+                        semaphore.release()
                     }
                 }
             }
@@ -320,7 +323,7 @@ class ProjectViewModel @Inject constructor(
     private suspend fun processFacesSpatial(photos: List<Photo>) {
         var previousFaceCenter: PointF? = null
 
-        photos.forEach { photo ->
+        for (photo in photos) {
             val result = faceDetectorHelper.detectFaces(Uri.parse(photo.originalUri))
             val faces = result.faces
             val width = result.width
@@ -328,7 +331,7 @@ class ProjectViewModel @Inject constructor(
 
             if (width == 0 || height == 0) {
                 repository.updatePhoto(photo.copy(isProcessed = true))
-                return@forEach
+                continue
             }
             if (photo.isProcessed) {
                 val fx = photo.faceX
