@@ -178,8 +178,8 @@ class ProjectViewModel @Inject constructor(
         }
     }
 
-    suspend fun getFacesForPhoto(photo: Photo): List<Face> {
-        return faceDetectorHelper.detectFaces(Uri.parse(photo.originalUri)).faces
+    suspend fun getFacesForPhoto(photo: Photo): FaceDetectionResult {
+        return faceDetectorHelper.detectFaces(Uri.parse(photo.originalUri))
     }
 
     fun updateFaceSelection(photo: Photo, face: Face) {

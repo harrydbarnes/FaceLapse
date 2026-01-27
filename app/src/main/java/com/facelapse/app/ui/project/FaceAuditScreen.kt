@@ -30,6 +30,7 @@ import coil.compose.AsyncImagePainter
 import coil.compose.rememberAsyncImagePainter
 import androidx.compose.ui.res.stringResource
 import com.facelapse.app.R
+import com.facelapse.app.domain.FaceDetectionResult
 import com.facelapse.app.domain.model.Photo
 import com.google.mlkit.vision.face.Face
 import kotlinx.coroutines.launch
@@ -130,15 +131,17 @@ fun FaceAuditItem(
     photo: Photo,
     viewModel: ProjectViewModel
 ) {
-    var detectedFaces by remember { mutableStateOf<List<Face>>(emptyList()) }
+    var detectionResult by remember { mutableStateOf<FaceDetectionResult?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var containerSize by remember { mutableStateOf(IntSize.Zero) }
 
     LaunchedEffect(photo.id) {
         isLoading = true
-        detectedFaces = viewModel.getFacesForPhoto(photo)
+        detectionResult = viewModel.getFacesForPhoto(photo)
         isLoading = false
     }
+
+    val detectedFaces = detectionResult?.faces ?: emptyList()
 
     // Determine currently selected face based on DB values
     val currentSelectedFace = remember(detectedFaces, photo) {
@@ -172,6 +175,12 @@ fun FaceAuditItem(
                 val (imgW, imgH) = intrinsicSize
                 val (viewW, viewH) = containerSize.width.toFloat() to containerSize.height.toFloat()
 
+                val originalW = detectionResult?.width?.toFloat() ?: imgW
+                val originalH = detectionResult?.height?.toFloat() ?: imgH
+
+                val scaleX = imgW / originalW
+                val scaleY = imgH / originalH
+
                 val scale = min(viewW / imgW, viewH / imgH)
                 val displayedW = imgW * scale
                 val displayedH = imgH * scale
@@ -181,10 +190,10 @@ fun FaceAuditItem(
                 val mappedFaces = detectedFaces.map { face ->
                     val rect = face.boundingBox
                     val mappedRect = Rect(
-                        left = rect.left * scale + offsetX,
-                        top = rect.top * scale + offsetY,
-                        right = rect.right * scale + offsetX,
-                        bottom = rect.bottom * scale + offsetY
+                        left = rect.left * scaleX * scale + offsetX,
+                        top = rect.top * scaleY * scale + offsetY,
+                        right = rect.right * scaleX * scale + offsetX,
+                        bottom = rect.bottom * scaleY * scale + offsetY
                     )
                     face to mappedRect
                 }
