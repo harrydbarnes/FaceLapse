@@ -65,6 +65,7 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.facelapse.app.R
+import com.facelapse.app.domain.FaceDetectionResult
 import com.facelapse.app.domain.model.Photo
 import com.facelapse.app.domain.model.Project
 import com.google.mlkit.vision.face.Face
@@ -110,6 +111,7 @@ fun ProjectDetailScreen(
     var showMenu by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showRenameDialog by remember { mutableStateOf(false) }
+    var showAudioPickerDialog by remember { mutableStateOf(false) }
 
     // State for Face Selection Dialog
     var selectedPhotoForEditing by remember { mutableStateOf<Photo?>(null) }
@@ -185,7 +187,7 @@ fun ProjectDetailScreen(
                         }
                         ActionTooltip(tooltip = "Add Background Audio") {
                             IconButton(
-                                onClick = { audioPickerLauncher.launch("audio/*") },
+                                onClick = { showAudioPickerDialog = true },
                                 enabled = !isGenerating && !isProcessing && photos.isNotEmpty()
                             ) {
                                 Icon(
@@ -314,6 +316,27 @@ fun ProjectDetailScreen(
                 }
             )
         }
+    }
+
+    if (showAudioPickerDialog) {
+        AudioPickerDialog(
+            onDismiss = { showAudioPickerDialog = false },
+            onSelectBuiltIn = { name ->
+                showAudioPickerDialog = false
+                if (name == "none") {
+                    audioUri = null
+                } else {
+                    val resId = context.resources.getIdentifier(name, "raw", context.packageName)
+                    if (resId != 0) {
+                        audioUri = Uri.parse("android.resource://${context.packageName}/$resId")
+                    }
+                }
+            },
+            onSelectCustom = {
+                showAudioPickerDialog = false
+                audioPickerLauncher.launch("audio/*")
+            }
+        )
     }
 
     // Preview Dialog
@@ -498,6 +521,43 @@ fun RenameProjectDialog(
 }
 
 @Composable
+fun AudioPickerDialog(
+    onDismiss: () -> Unit,
+    onSelectBuiltIn: (String) -> Unit,
+    onSelectCustom: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Select Background Audio") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = { onSelectBuiltIn("ambient") }) {
+                    Text("Ambient")
+                }
+                TextButton(onClick = { onSelectBuiltIn("energetic") }) {
+                    Text("Energetic")
+                }
+                TextButton(onClick = { onSelectBuiltIn("calm") }) {
+                    Text("Calm")
+                }
+                HorizontalDivider()
+                TextButton(onClick = onSelectCustom) {
+                    Text("Custom File...")
+                }
+                TextButton(onClick = { onSelectBuiltIn("none") }) {
+                    Text("None (Remove Audio)", color = MaterialTheme.colorScheme.error)
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
 fun PreviewDialog(
     result: ExportResult,
     onDismiss: () -> Unit,
@@ -629,7 +689,7 @@ fun FaceSelectionDialog(
     viewModel: ProjectViewModel,
     onDismiss: () -> Unit
 ) {
-    var detectedFaces by remember { mutableStateOf<List<Face>>(emptyList()) }
+    var detectionResult by remember { mutableStateOf<FaceDetectionResult?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var containerSize by remember { mutableStateOf(IntSize.Zero) }
 
@@ -638,11 +698,13 @@ fun FaceSelectionDialog(
 
     // Load faces when dialog opens
     LaunchedEffect(photo) {
-        val faces = viewModel.getFacesForPhoto(photo)
-        detectedFaces = faces
-        selectedFace = findMatchingFace(faces, photo)
+        val result = viewModel.getFacesForPhoto(photo)
+        detectionResult = result
+        selectedFace = findMatchingFace(result.faces, photo)
         isLoading = false
     }
+
+    val detectedFaces = detectionResult?.faces ?: emptyList()
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -684,6 +746,12 @@ fun FaceSelectionDialog(
                             val (imgW, imgH) = intrinsicSize
                             val (viewW, viewH) = containerSize.width.toFloat() to containerSize.height.toFloat()
 
+                            val originalW = detectionResult?.width?.toFloat() ?: imgW
+                            val originalH = detectionResult?.height?.toFloat() ?: imgH
+
+                            val scaleX = imgW / originalW
+                            val scaleY = imgH / originalH
+
                             // Calculate ContentScale.Fit logic
                             val scale = min(viewW / imgW, viewH / imgH)
                             val displayedW = imgW * scale
@@ -695,10 +763,10 @@ fun FaceSelectionDialog(
                             val mappedFaces = detectedFaces.map { face ->
                                 val rect = face.boundingBox
                                 val mappedRect = Rect(
-                                    left = rect.left * scale + offsetX,
-                                    top = rect.top * scale + offsetY,
-                                    right = rect.right * scale + offsetX,
-                                    bottom = rect.bottom * scale + offsetY
+                                    left = rect.left * scaleX * scale + offsetX,
+                                    top = rect.top * scaleY * scale + offsetY,
+                                    right = rect.right * scaleX * scale + offsetX,
+                                    bottom = rect.bottom * scaleY * scale + offsetY
                                 )
                                 face to mappedRect
                             }
