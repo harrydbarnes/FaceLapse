@@ -99,6 +99,11 @@ dependencies {
     implementation(libs.mlkit.face.detection)
     implementation(libs.play.services.tasks)
 
+    // TensorFlow Lite
+    implementation(libs.tensorflow.lite)
+    implementation(libs.tensorflow.lite.support)
+    implementation(libs.tensorflow.lite.gpu)
+
     // Coil
     implementation(libs.coil.compose)
     implementation(libs.coil.gif)

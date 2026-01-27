@@ -14,5 +14,6 @@ data class ProjectEntity(
     val fps: Float = 10f,
     val exportAsGif: Boolean = false,
     val faceScale: Float = Project.DEFAULT_FACE_SCALE,
-    val aspectRatio: String = Project.DEFAULT_ASPECT_RATIO
+    val aspectRatio: String = Project.DEFAULT_ASPECT_RATIO,
+    val targetEmbedding: String? = null
 )

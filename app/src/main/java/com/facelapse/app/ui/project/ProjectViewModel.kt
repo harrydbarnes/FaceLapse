@@ -13,6 +13,7 @@ import com.facelapse.app.data.repository.ProjectRepository
 import com.facelapse.app.data.repository.SettingsRepository
 import com.facelapse.app.domain.FaceDetectionResult
 import com.facelapse.app.domain.FaceDetectorHelper
+import com.facelapse.app.domain.FaceRecognitionHelper
 import com.facelapse.app.domain.ImageLoader
 import com.facelapse.app.domain.VideoGenerator
 import com.facelapse.app.domain.model.Photo
@@ -48,6 +49,7 @@ class ProjectViewModel @Inject constructor(
     private val repository: ProjectRepository,
     private val settingsRepository: SettingsRepository,
     private val faceDetectorHelper: FaceDetectorHelper,
+    private val faceRecognitionHelper: FaceRecognitionHelper,
     private val videoGenerator: VideoGenerator,
     private val imageLoader: ImageLoader,
     savedStateHandle: SavedStateHandle
@@ -196,60 +198,149 @@ class ProjectViewModel @Inject constructor(
         }
     }
 
-    fun processFaces() {
+    fun setTargetPerson(photo: Photo, face: Face) {
         viewModelScope.launch {
             _isProcessing.value = true
-            val id = projectId
-            if (id == null) {
-                _isProcessing.value = false
-                return@launch
-            }
-            val currentPhotos = repository.getPhotosList(id).sortedBy { it.sortOrder }
-
-            var previousFaceCenter: PointF? = null
-
-            currentPhotos.forEach { photo ->
-                val result = faceDetectorHelper.detectFaces(Uri.parse(photo.originalUri))
-                val faces = result.faces
-                val width = result.width
-                val height = result.height
-
-                if (width == 0 || height == 0) {
-                    repository.updatePhoto(photo.copy(isProcessed = true))
-                    return@forEach
-                }
-
-                if (photo.isProcessed) {
-                    val fx = photo.faceX
-                    val fy = photo.faceY
-                    val fw = photo.faceWidth
-                    val fh = photo.faceHeight
-
-                    previousFaceCenter = if (fx != null && fy != null && fw != null && fh != null) {
-                        calculateNormalizedCenter(fx, fy, fw, fh, width, height)
-                    } else {
-                        null
-                    }
-                } else {
-                    val bestFace = if (previousFaceCenter == null) {
-                        // First frame or lost track: Largest face
-                        faces.maxByOrNull { it.boundingBox.width() * it.boundingBox.height() }
-                    } else {
-                        val prevCenter = checkNotNull(previousFaceCenter)
-                        // Find closest to previous center
-                        faces.minByOrNull { face ->
-                            val center = calculateNormalizedCenter(
-                                face.boundingBox.left.toFloat(),
-                                face.boundingBox.top.toFloat(),
-                                face.boundingBox.width().toFloat(),
-                                face.boundingBox.height().toFloat(),
-                                width,
-                                height
-                            )
-                            hypot(center.x - prevCenter.x, center.y - prevCenter.y)
+            withContext(Dispatchers.Default) {
+                try {
+                    val loaded = imageLoader.loadOptimizedBitmap(Uri.parse(photo.originalUri), 1024, 1024)
+                    if (loaded != null) {
+                        try {
+                            val embedding = faceRecognitionHelper.getFaceEmbedding(loaded.bitmap, face)
+                            if (embedding != null) {
+                                val embeddingStr = embeddingToString(embedding)
+                                val id = projectId ?: return@withContext
+                                val currentProject = repository.getProject(id) ?: return@withContext
+                                repository.updateProject(currentProject.copy(targetEmbedding = embeddingStr))
+                                processFacesInternal()
+                            }
+                        } finally {
+                            if (!loaded.bitmap.isRecycled) loaded.bitmap.recycle()
                         }
                     }
+                } catch (e: Exception) {
+                    Log.e("ProjectViewModel", "Error setting target person", e)
+                } finally {
+                    _isProcessing.value = false
+                }
+            }
+        }
+    }
 
+    private fun embeddingToString(embedding: FloatArray): String {
+        return embedding.joinToString(",")
+    }
+
+    private fun stringToEmbedding(str: String): FloatArray {
+        return str.split(",").map { it.toFloat() }.toFloatArray()
+    }
+
+    fun processFaces() {
+        viewModelScope.launch {
+            processFacesInternal()
+        }
+    }
+
+    private suspend fun processFacesInternal() {
+        _isProcessing.value = true
+        val id = projectId
+        if (id == null) {
+            _isProcessing.value = false
+            return
+        }
+
+        withContext(Dispatchers.Default) {
+            try {
+                val project = repository.getProject(id)
+                val targetEmbedding = project?.targetEmbedding?.let { stringToEmbedding(it) }
+                val currentPhotos = repository.getPhotosList(id).sortedBy { it.sortOrder }
+
+                var previousFaceCenter: PointF? = null
+
+                currentPhotos.forEach { photo ->
+                    val result = faceDetectorHelper.detectFaces(Uri.parse(photo.originalUri))
+                    val faces = result.faces
+                    val width = result.width
+                    val height = result.height
+
+                    if (width == 0 || height == 0) {
+                        repository.updatePhoto(photo.copy(isProcessed = true))
+                        return@forEach
+                    }
+
+                    val bestFace = if (targetEmbedding != null) {
+                        if (faces.isEmpty()) null
+                        else {
+                            val loaded = imageLoader.loadOptimizedBitmap(Uri.parse(photo.originalUri), 1024, 1024)
+                            if (loaded != null) {
+                                try {
+                                    var bestCandidate: Face? = null
+                                    var bestScore = -1f
+
+                                    for (face in faces) {
+                                        val embed = faceRecognitionHelper.getFaceEmbedding(loaded.bitmap, face)
+                                        if (embed != null) {
+                                            val score = faceRecognitionHelper.calculateCosineSimilarity(embed, targetEmbedding)
+                                            if (score > bestScore) {
+                                                bestScore = score
+                                                bestCandidate = face
+                                            }
+                                        }
+                                    }
+
+                                    if (bestScore > FaceRecognitionHelper.THRESHOLD) bestCandidate else null
+                                } finally {
+                                    if (!loaded.bitmap.isRecycled) loaded.bitmap.recycle()
+                                }
+                            } else null
+                        }
+                    } else {
+                    if (photo.isProcessed) {
+                        val fx = photo.faceX
+                        val fy = photo.faceY
+                        val fw = photo.faceWidth
+                        val fh = photo.faceHeight
+
+                        previousFaceCenter = if (fx != null && fy != null && fw != null && fh != null) {
+                            calculateNormalizedCenter(fx, fy, fw, fh, width, height)
+                        } else {
+                            null
+                        }
+                        null
+                    } else {
+                        if (previousFaceCenter == null) {
+                            faces.maxByOrNull { it.boundingBox.width() * it.boundingBox.height() }
+                        } else {
+                            val prevCenter = checkNotNull(previousFaceCenter)
+                            faces.minByOrNull { face ->
+                                val center = calculateNormalizedCenter(
+                                    face.boundingBox.left.toFloat(),
+                                    face.boundingBox.top.toFloat(),
+                                    face.boundingBox.width().toFloat(),
+                                    face.boundingBox.height().toFloat(),
+                                    width,
+                                    height
+                                )
+                                hypot(center.x - prevCenter.x, center.y - prevCenter.y)
+                            }
+                        }
+                    }
+                }
+
+                if (targetEmbedding != null) {
+                    if (bestFace != null) {
+                        val updatedPhoto = photo.copy(
+                            isProcessed = true,
+                            faceX = bestFace.boundingBox.left.toFloat(),
+                            faceY = bestFace.boundingBox.top.toFloat(),
+                            faceWidth = bestFace.boundingBox.width().toFloat(),
+                            faceHeight = bestFace.boundingBox.height().toFloat()
+                        )
+                        repository.updatePhoto(updatedPhoto)
+                    } else {
+                         repository.updatePhoto(photo.copy(isProcessed = false))
+                    }
+                } else {
                     if (bestFace != null) {
                         val updatedPhoto = photo.copy(
                             isProcessed = true,
@@ -269,12 +360,16 @@ class ProjectViewModel @Inject constructor(
                             height
                         )
                     } else {
-                        repository.updatePhoto(photo.copy(isProcessed = true))
+                        if (!photo.isProcessed) {
+                            repository.updatePhoto(photo.copy(isProcessed = true))
+                        }
                     }
                 }
             }
+        } finally {
             _isProcessing.value = false
         }
+    }
     }
 
     private fun calculateNormalizedCenter(

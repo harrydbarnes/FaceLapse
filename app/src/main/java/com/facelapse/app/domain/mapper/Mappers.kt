@@ -17,7 +17,8 @@ fun ProjectEntity.toDomain(): Project {
         fps = fps,
         exportAsGif = exportAsGif,
         faceScale = faceScale,
-        aspectRatio = aspectRatio
+        aspectRatio = aspectRatio,
+        targetEmbedding = targetEmbedding
     )
 }
 
@@ -30,7 +31,8 @@ fun Project.toEntity(): ProjectEntity {
         fps = fps,
         exportAsGif = exportAsGif,
         faceScale = faceScale,
-        aspectRatio = aspectRatio
+        aspectRatio = aspectRatio,
+        targetEmbedding = targetEmbedding
     )
 }
 

@@ -10,7 +10,8 @@ data class Project(
     val fps: Float,
     val exportAsGif: Boolean,
     val faceScale: Float,
-    val aspectRatio: String
+    val aspectRatio: String,
+    val targetEmbedding: String? = null
 ) {
     companion object {
         const val RATIO_9_16 = "9:16"

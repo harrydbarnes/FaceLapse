@@ -63,12 +63,18 @@ object DatabaseModule {
             }
         }
 
+        val MIGRATION_4_5 = object : androidx.room.migration.Migration(4, 5) {
+            override fun migrate(database: androidx.sqlite.db.SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE projects ADD COLUMN targetEmbedding TEXT DEFAULT NULL")
+            }
+        }
+
         return Room.databaseBuilder(
             context,
             FaceLapseDatabase::class.java,
             "facelapse.db"
         )
-        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
         .build()
     }
 
