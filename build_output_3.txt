@@ -37,9 +37,9 @@ Configuration on demand is an incubating feature.
 > Task :app:compileDebugJavaWithJavac
 > Task :app:hiltAggregateDepsDebug UP-TO-DATE
 > Task :app:hiltJavaCompileDebug
-> Task :app:processDebugJavaRes
+> Task :app:processDebugJavaRes UP-TO-DATE
+> Task :app:mergeDebugJavaResource UP-TO-DATE
 > Task :app:transformDebugClassesWithAsm
-> Task :app:mergeDebugJavaResource
 > Task :app:dexBuilderDebug
 > Task :app:mergeDebugGlobalSynthetics UP-TO-DATE
 > Task :app:mergeProjectDexDebug
@@ -47,5 +47,5 @@ Configuration on demand is an incubating feature.
 > Task :app:createDebugApkListingFileRedirect UP-TO-DATE
 > Task :app:assembleDebug
 
-BUILD SUCCESSFUL in 1m 4s
-40 actionable tasks: 10 executed, 30 up-to-date
+BUILD SUCCESSFUL in 52s
+40 actionable tasks: 8 executed, 32 up-to-date

@@ -258,53 +258,58 @@ class ProjectViewModel @Inject constructor(
     }
 
     private suspend fun processFacesWithTarget(photos: List<Photo>, targetEmbedding: FloatArray) {
-        photos.forEach { photo ->
-            val loaded = imageLoader.loadOptimizedBitmap(Uri.parse(photo.originalUri), 1024, 1024)
-            if (loaded != null) {
-                try {
-                    val result = faceDetectorHelper.detectFaces(loaded.bitmap)
-                    val faces = result.faces
+        withContext(Dispatchers.IO) {
+            val jobs = photos.map { photo ->
+                async {
+                    val loaded = imageLoader.loadOptimizedBitmap(Uri.parse(photo.originalUri), 1024, 1024)
+                    if (loaded != null) {
+                        try {
+                            val result = faceDetectorHelper.detectFaces(loaded.bitmap)
+                            val faces = result.faces
 
-                    if (result.width == 0 || result.height == 0) {
-                        repository.updatePhoto(photo.copy(isProcessed = true))
-                        return@forEach
-                    }
-
-                    var bestCandidate: Face? = null
-                    var bestScore = -1f
-
-                    for (face in faces) {
-                        val embed = faceRecognitionHelper.getFaceEmbedding(loaded.bitmap, face)
-                        if (embed != null) {
-                            val score = faceRecognitionHelper.calculateCosineSimilarity(embed, targetEmbedding)
-                            if (score > bestScore) {
-                                bestScore = score
-                                bestCandidate = face
+                            if (result.width == 0 || result.height == 0) {
+                                repository.updatePhoto(photo.copy(isProcessed = true))
+                                return@async
                             }
+
+                            var bestCandidate: Face? = null
+                            var bestScore = -1f
+
+                            for (face in faces) {
+                                val embed = faceRecognitionHelper.getFaceEmbedding(loaded.bitmap, face)
+                                if (embed != null) {
+                                    val score = faceRecognitionHelper.calculateCosineSimilarity(embed, targetEmbedding)
+                                    if (score > bestScore) {
+                                        bestScore = score
+                                        bestCandidate = face
+                                    }
+                                }
+                            }
+
+                            val bestFace = if (bestScore > FaceRecognitionHelper.THRESHOLD) bestCandidate else null
+
+                            if (bestFace != null) {
+                                val updatedPhoto = photo.copy(
+                                    isProcessed = true,
+                                    faceX = bestFace.boundingBox.left.toFloat(),
+                                    faceY = bestFace.boundingBox.top.toFloat(),
+                                    faceWidth = bestFace.boundingBox.width().toFloat(),
+                                    faceHeight = bestFace.boundingBox.height().toFloat()
+                                )
+                                repository.updatePhoto(updatedPhoto)
+                            } else {
+                                repository.updatePhoto(photo.copy(isProcessed = false))
+                            }
+                        } finally {
+                            if (!loaded.bitmap.isRecycled) loaded.bitmap.recycle()
                         }
-                    }
-
-                    val bestFace = if (bestScore > FaceRecognitionHelper.THRESHOLD) bestCandidate else null
-
-                    if (bestFace != null) {
-                        val updatedPhoto = photo.copy(
-                            isProcessed = true,
-                            faceX = bestFace.boundingBox.left.toFloat(),
-                            faceY = bestFace.boundingBox.top.toFloat(),
-                            faceWidth = bestFace.boundingBox.width().toFloat(),
-                            faceHeight = bestFace.boundingBox.height().toFloat()
-                        )
-                        repository.updatePhoto(updatedPhoto)
                     } else {
+                        // Failed to load, keep as unprocessed
                         repository.updatePhoto(photo.copy(isProcessed = false))
                     }
-                } finally {
-                    if (!loaded.bitmap.isRecycled) loaded.bitmap.recycle()
                 }
-            } else {
-                // Failed to load
-                repository.updatePhoto(photo.copy(isProcessed = true))
             }
+            jobs.awaitAll()
         }
     }
 

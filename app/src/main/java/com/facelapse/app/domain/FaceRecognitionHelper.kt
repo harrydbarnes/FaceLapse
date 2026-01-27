@@ -109,10 +109,12 @@ class FaceRecognitionHelper @Inject constructor(
         return if (mag > 0) dot / mag else 0f
     }
 
-    fun close() {
-        interpreter?.close()
-        interpreter = null
-        gpuDelegate?.close()
-        gpuDelegate = null
+    suspend fun close() {
+        mutex.withLock {
+            interpreter?.close()
+            interpreter = null
+            gpuDelegate?.close()
+            gpuDelegate = null
+        }
     }
 }
