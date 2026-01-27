@@ -368,7 +368,13 @@ class ProjectViewModel @Inject constructor(
             val mimeType: String
             val generator: suspend (File) -> Boolean
 
-            val (targetWidth, targetHeight) = Project.getDimensionsForAspectRatio(project.aspectRatio)
+            val fullDims = Project.getDimensionsForAspectRatio(project.aspectRatio)
+            val (targetWidth, targetHeight) = if (project.exportAsGif) {
+                val scale = 480f / kotlin.math.min(fullDims.first, fullDims.second)
+                (fullDims.first * scale).toInt() to (fullDims.second * scale).toInt()
+            } else {
+                fullDims
+            }
 
             if (project.exportAsGif) {
                 extension = "gif"

@@ -27,6 +27,7 @@ data class Project(
 
         fun getDimensionsForAspectRatio(ratio: String): Pair<Int, Int> {
             return when (ratio) {
+                RATIO_9_16 -> 1080 to 1920
                 RATIO_16_9 -> 1920 to 1080
                 RATIO_1_1 -> 1080 to 1080
                 RATIO_4_5 -> 1080 to 1350
