@@ -413,7 +413,7 @@ fun ProjectSettingsDialog(
                     Slider(
                         value = faceScale,
                         onValueChange = { faceScale = it },
-                        valueRange = 0.1f..0.8f
+                        valueRange = Project.MIN_FACE_SCALE..Project.MAX_FACE_SCALE
                     )
                 }
 
