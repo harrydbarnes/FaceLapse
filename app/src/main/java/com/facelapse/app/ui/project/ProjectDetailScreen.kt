@@ -296,11 +296,11 @@ fun ProjectDetailScreen(
             ProjectSettingsDialog(
                 project = p,
                 onDismiss = { showSettingsDialog = false },
-                onSave = { fps, isGif, isOverlay ->
-                    viewModel.updateProjectSettings(fps, isGif, isOverlay)
+                onSave = { fps, isGif, isOverlay, faceScale, aspectRatio ->
+                    viewModel.updateProjectSettings(fps, isGif, isOverlay, faceScale, aspectRatio)
                 },
-                onExport = { fps, isGif, isOverlay ->
-                    viewModel.saveAndExport(context, fps, isGif, isOverlay, audioUri)
+                onExport = { fps, isGif, isOverlay, faceScale, aspectRatio ->
+                    viewModel.saveAndExport(context, fps, isGif, isOverlay, faceScale, aspectRatio, audioUri)
                 }
             )
         }
@@ -381,12 +381,14 @@ private fun ActionTooltip(
 fun ProjectSettingsDialog(
     project: Project,
     onDismiss: () -> Unit,
-    onSave: (Float, Boolean, Boolean) -> Unit,
-    onExport: (Float, Boolean, Boolean) -> Unit
+    onSave: (Float, Boolean, Boolean, Float, String) -> Unit,
+    onExport: (Float, Boolean, Boolean, Float, String) -> Unit
 ) {
     var fps: Float by remember { mutableStateOf(project.fps) }
     var exportAsGif: Boolean by remember { mutableStateOf(project.exportAsGif) }
     var isDateOverlayEnabled: Boolean by remember { mutableStateOf(project.isDateOverlayEnabled) }
+    var faceScale: Float by remember { mutableStateOf(project.faceScale) }
+    var aspectRatio: String by remember { mutableStateOf(project.aspectRatio) }
     val decimalFormat = remember { DecimalFormat("#.##") }
 
     AlertDialog(
@@ -403,6 +405,33 @@ fun ProjectSettingsDialog(
                         valueRange = 0.25f..10f,
                         steps = 38
                     )
+                }
+
+                // Face Zoom
+                Column {
+                    Text("Face Zoom: ${(faceScale * 100).toInt()}%")
+                    Slider(
+                        value = faceScale,
+                        onValueChange = { faceScale = it },
+                        valueRange = 0.1f..0.8f
+                    )
+                }
+
+                // Aspect Ratio
+                Column {
+                    Text("Aspect Ratio")
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf("9:16", "1:1", "16:9", "4:5").forEach { ratio ->
+                            FilterChip(
+                                selected = (aspectRatio == ratio),
+                                onClick = { aspectRatio = ratio },
+                                label = { Text(ratio) }
+                            )
+                        }
+                    }
                 }
 
                 // Export Format
@@ -478,13 +507,13 @@ fun ProjectSettingsDialog(
                     Text("Cancel")
                 }
                 Button(onClick = {
-                    onSave(fps, exportAsGif, isDateOverlayEnabled)
+                    onSave(fps, exportAsGif, isDateOverlayEnabled, faceScale, aspectRatio)
                     onDismiss()
                 }) {
                     Text("Save")
                 }
                 Button(onClick = {
-                    onExport(fps, exportAsGif, isDateOverlayEnabled)
+                    onExport(fps, exportAsGif, isDateOverlayEnabled, faceScale, aspectRatio)
                     onDismiss()
                 }) {
                     Text("Share")

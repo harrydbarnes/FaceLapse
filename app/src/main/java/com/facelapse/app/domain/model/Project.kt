@@ -8,5 +8,7 @@ data class Project(
     val createdAt: LocalDateTime,
     val isDateOverlayEnabled: Boolean,
     val fps: Float,
-    val exportAsGif: Boolean
+    val exportAsGif: Boolean,
+    val faceScale: Float,
+    val aspectRatio: String
 )

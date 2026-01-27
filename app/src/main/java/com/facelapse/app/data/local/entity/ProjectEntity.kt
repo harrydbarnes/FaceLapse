@@ -11,5 +11,7 @@ data class ProjectEntity(
     val createdAt: Long = System.currentTimeMillis(),
     val isDateOverlayEnabled: Boolean = true,
     val fps: Float = 10f,
-    val exportAsGif: Boolean = false
+    val exportAsGif: Boolean = false,
+    val faceScale: Float = 0.4f,
+    val aspectRatio: String = "9:16"
 )

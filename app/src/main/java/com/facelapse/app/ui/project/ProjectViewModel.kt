@@ -289,9 +289,9 @@ class ProjectViewModel @Inject constructor(
         return PointF(centerX / imageWidth, centerY / imageHeight)
     }
 
-    fun updateProjectSettings(fps: Float, exportAsGif: Boolean, isDateOverlayEnabled: Boolean) {
+    fun updateProjectSettings(fps: Float, exportAsGif: Boolean, isDateOverlayEnabled: Boolean, faceScale: Float, aspectRatio: String) {
         viewModelScope.launch {
-            updateProjectInternal(fps, exportAsGif, isDateOverlayEnabled)
+            updateProjectInternal(fps, exportAsGif, isDateOverlayEnabled, faceScale, aspectRatio)
         }
     }
 
@@ -299,11 +299,11 @@ class ProjectViewModel @Inject constructor(
      * Atomically saves settings and then triggers export to prevent race conditions where
      * the export uses stale settings.
      */
-    fun saveAndExport(context: Context, fps: Float, exportAsGif: Boolean, isDateOverlayEnabled: Boolean, audioUri: Uri? = null) {
+    fun saveAndExport(context: Context, fps: Float, exportAsGif: Boolean, isDateOverlayEnabled: Boolean, faceScale: Float, aspectRatio: String, audioUri: Uri? = null) {
         viewModelScope.launch {
             _isGenerating.value = true
             try {
-                val updatedProject = updateProjectInternal(fps, exportAsGif, isDateOverlayEnabled)
+                val updatedProject = updateProjectInternal(fps, exportAsGif, isDateOverlayEnabled, faceScale, aspectRatio)
                 if (updatedProject != null) {
                     // exportVideoInternal will set _isGenerating to false in its own finally block.
                     exportVideoInternal(context, updatedProject, audioUri)
@@ -317,13 +317,15 @@ class ProjectViewModel @Inject constructor(
         }
     }
 
-    private suspend fun updateProjectInternal(fps: Float, exportAsGif: Boolean, isDateOverlayEnabled: Boolean): Project? {
+    private suspend fun updateProjectInternal(fps: Float, exportAsGif: Boolean, isDateOverlayEnabled: Boolean, faceScale: Float, aspectRatio: String): Project? {
         val id = projectId ?: return null
         val currentProject = repository.getProject(id) ?: return null
         val updatedProject = currentProject.copy(
             fps = fps,
             exportAsGif = exportAsGif,
-            isDateOverlayEnabled = isDateOverlayEnabled
+            isDateOverlayEnabled = isDateOverlayEnabled,
+            faceScale = faceScale,
+            aspectRatio = aspectRatio
         )
         repository.updateProject(updatedProject)
         return updatedProject
@@ -366,6 +368,13 @@ class ProjectViewModel @Inject constructor(
             val mimeType: String
             val generator: suspend (File) -> Boolean
 
+            val (targetWidth, targetHeight) = when (project.aspectRatio) {
+                "16:9" -> 1920 to 1080
+                "1:1" -> 1080 to 1080
+                "4:5" -> 1080 to 1350
+                else -> 1080 to 1920 // Default 9:16
+            }
+
             if (project.exportAsGif) {
                 extension = "gif"
                 mimeType = "image/gif"
@@ -376,8 +385,10 @@ class ProjectViewModel @Inject constructor(
                         isDateOverlayEnabled = isDateOverlayEnabled,
                         dateFontSize = dateFontSize,
                         dateFormat = dateFormat,
-                        fps = project.fps
-                        // GIF does not support audio, so audioUri is ignored
+                        fps = project.fps,
+                        targetWidth = targetWidth,
+                        targetHeight = targetHeight,
+                        faceScale = project.faceScale
                     )
                 }
             } else {
@@ -391,7 +402,10 @@ class ProjectViewModel @Inject constructor(
                         dateFontSize = dateFontSize,
                         dateFormat = dateFormat,
                         fps = project.fps,
-                        audioUri = audioUri
+                        targetWidth = targetWidth,
+                        targetHeight = targetHeight,
+                        audioUri = audioUri,
+                        faceScale = project.faceScale
                     )
                 }
             }

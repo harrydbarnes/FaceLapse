@@ -55,7 +55,8 @@ class VideoGenerator @Inject constructor(
     private suspend fun calculateSmoothedCropParams(
         photos: List<Photo>,
         targetWidth: Int,
-        targetHeight: Int
+        targetHeight: Int,
+        faceScale: Float
     ): List<CropParams?> {
         val rawParams = photos.map { photo ->
             val dims = imageLoader.getDimensions(Uri.parse(photo.originalUri)) ?: return@map null
@@ -67,9 +68,9 @@ class VideoGenerator @Inject constructor(
 
             // Zoom effect (Face Normalization)
             if (photo.faceWidth != null && photo.faceWidth > 0) {
-                val targetFaceWidth = targetWidth * 0.4f
-                val faceScale = targetFaceWidth / photo.faceWidth
-                scale = kotlin.math.max(minScale, faceScale)
+                val targetFaceWidth = targetWidth * faceScale
+                val faceScaleFactor = targetFaceWidth / photo.faceWidth
+                scale = kotlin.math.max(minScale, faceScaleFactor)
             }
 
             var centerX = w / 2f
@@ -115,7 +116,8 @@ class VideoGenerator @Inject constructor(
         targetWidth: Int = 1080,
         targetHeight: Int = 1920,
         fps: Float = 10f,
-        audioUri: Uri? = null
+        audioUri: Uri? = null,
+        faceScale: Float = 0.4f
     ): Boolean = withContext(Dispatchers.IO) {
         if (outputFile.exists()) outputFile.delete()
 
@@ -143,7 +145,7 @@ class VideoGenerator @Inject constructor(
         val dateOverlayCache = mutableMapOf<String, OverlayEffect>()
 
         try {
-            val cropParamsList = calculateSmoothedCropParams(photos, targetWidth, targetHeight)
+            val cropParamsList = calculateSmoothedCropParams(photos, targetWidth, targetHeight, faceScale)
 
             val editedMediaItems = photos.zip(cropParamsList).mapNotNull { (photo, params) ->
                 currentCoroutineContext().ensureActive()
@@ -255,7 +257,8 @@ class VideoGenerator @Inject constructor(
         dateFormat: String,
         targetWidth: Int = 480,
         targetHeight: Int = 854,
-        fps: Float = 10f
+        fps: Float = 10f,
+        faceScale: Float = 0.4f
     ): Boolean {
         return withContext(Dispatchers.IO) {
             var frameBuffer: FrameBuffer? = null
@@ -294,7 +297,7 @@ class VideoGenerator @Inject constructor(
                         }
                     } else null
 
-                    val cropParamsList = calculateSmoothedCropParams(photos, targetWidth, targetHeight)
+                    val cropParamsList = calculateSmoothedCropParams(photos, targetWidth, targetHeight, faceScale)
 
                     for ((photo, params) in photos.zip(cropParamsList)) {
                         currentCoroutineContext().ensureActive()

@@ -28,7 +28,16 @@ class ProjectRepository @Inject constructor(
     suspend fun createProject(name: String, fps: Float, exportAsGif: Boolean) {
         val id = java.util.UUID.randomUUID().toString()
         val createdAt = java.time.LocalDateTime.now()
-        projectDao.insertProject(Project(id = id, name = name, fps = fps, exportAsGif = exportAsGif, createdAt = createdAt, isDateOverlayEnabled = true).toEntity())
+        projectDao.insertProject(Project(
+            id = id,
+            name = name,
+            fps = fps,
+            exportAsGif = exportAsGif,
+            createdAt = createdAt,
+            isDateOverlayEnabled = true,
+            faceScale = 0.4f,
+            aspectRatio = "9:16"
+        ).toEntity())
     }
 
     suspend fun updateProject(project: Project) {
