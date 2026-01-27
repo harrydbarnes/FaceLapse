@@ -15,7 +15,9 @@ fun ProjectEntity.toDomain(): Project {
         createdAt = LocalDateTime.ofInstant(Instant.ofEpochMilli(createdAt), ZoneId.systemDefault()),
         isDateOverlayEnabled = isDateOverlayEnabled,
         fps = fps,
-        exportAsGif = exportAsGif
+        exportAsGif = exportAsGif,
+        faceScale = faceScale,
+        aspectRatio = aspectRatio
     )
 }
 
@@ -26,7 +28,9 @@ fun Project.toEntity(): ProjectEntity {
         createdAt = createdAt.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli(),
         isDateOverlayEnabled = isDateOverlayEnabled,
         fps = fps,
-        exportAsGif = exportAsGif
+        exportAsGif = exportAsGif,
+        faceScale = faceScale,
+        aspectRatio = aspectRatio
     )
 }
 
