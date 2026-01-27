@@ -326,7 +326,12 @@ fun ProjectDetailScreen(
                 if (name == "none") {
                     audioUri = null
                 } else {
-                    val resId = context.resources.getIdentifier(name, "raw", context.packageName)
+                    val resId = when (name) {
+                        "ambient" -> R.raw.ambient
+                        "energetic" -> R.raw.energetic
+                        "calm" -> R.raw.calm
+                        else -> 0
+                    }
                     if (resId != 0) {
                         audioUri = Uri.parse("android.resource://${context.packageName}/$resId")
                     }
