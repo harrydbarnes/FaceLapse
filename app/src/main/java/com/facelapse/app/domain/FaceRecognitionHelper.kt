@@ -16,10 +16,12 @@ import javax.inject.Inject
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.math.sqrt
+import java.io.Closeable
+import kotlinx.coroutines.runBlocking
 
 class FaceRecognitionHelper @Inject constructor(
     @ApplicationContext private val context: Context
-) {
+) : Closeable {
     private @Volatile var interpreter: Interpreter? = null
     private @Volatile var gpuDelegate: GpuDelegate? = null
     private val mutex = Mutex()
@@ -110,12 +112,14 @@ class FaceRecognitionHelper @Inject constructor(
         return if (mag > 0) dot / mag else 0f
     }
 
-    suspend fun close() {
-        mutex.withLock {
-            interpreter?.close()
-            interpreter = null
-            gpuDelegate?.close()
-            gpuDelegate = null
+    override fun close() {
+        runBlocking {
+            mutex.withLock {
+                interpreter?.close()
+                interpreter = null
+                gpuDelegate?.close()
+                gpuDelegate = null
+            }
         }
     }
 }
