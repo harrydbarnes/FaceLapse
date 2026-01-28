@@ -34,8 +34,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -57,6 +55,10 @@ class ProjectViewModel @Inject constructor(
     private val imageLoader: ImageLoader,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
+
+    init {
+        addCloseable(faceRecognitionHelper)
+    }
 
     companion object {
         private val filenameTimestampFormatter = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")
@@ -559,14 +561,6 @@ class ProjectViewModel @Inject constructor(
     fun deletePhoto(photo: Photo) {
         viewModelScope.launch {
             repository.deletePhoto(photo)
-        }
-    }
-
-    @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
-    override fun onCleared() {
-        super.onCleared()
-        GlobalScope.launch(Dispatchers.IO) {
-            faceRecognitionHelper.close()
         }
     }
 }
