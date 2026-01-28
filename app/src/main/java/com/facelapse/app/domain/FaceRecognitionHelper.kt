@@ -17,7 +17,9 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.math.sqrt
 import java.io.Closeable
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class FaceRecognitionHelper @Inject constructor(
     @ApplicationContext private val context: Context
@@ -113,7 +115,7 @@ class FaceRecognitionHelper @Inject constructor(
     }
 
     override fun close() {
-        runBlocking {
+        CoroutineScope(Dispatchers.IO).launch {
             mutex.withLock {
                 interpreter?.close()
                 interpreter = null
