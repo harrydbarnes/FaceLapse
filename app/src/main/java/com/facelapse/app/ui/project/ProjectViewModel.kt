@@ -34,6 +34,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -562,9 +564,10 @@ class ProjectViewModel @Inject constructor(
         }
     }
 
+    @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
     override fun onCleared() {
         super.onCleared()
-        kotlinx.coroutines.runBlocking {
+        GlobalScope.launch(Dispatchers.IO) {
             faceRecognitionHelper.close()
         }
     }

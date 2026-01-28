@@ -47,5 +47,5 @@ Configuration on demand is an incubating feature.
 > Task :app:createDebugApkListingFileRedirect UP-TO-DATE
 > Task :app:assembleDebug
 
-BUILD SUCCESSFUL in 1m 54s
+BUILD SUCCESSFUL in 40s
 40 actionable tasks: 8 executed, 32 up-to-date
