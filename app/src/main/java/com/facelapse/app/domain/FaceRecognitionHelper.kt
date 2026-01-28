@@ -17,7 +17,10 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.math.sqrt
 import java.io.Closeable
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.SupervisorJob
 
 class FaceRecognitionHelper @Inject constructor(
     @ApplicationContext private val context: Context
@@ -25,6 +28,7 @@ class FaceRecognitionHelper @Inject constructor(
     private @Volatile var interpreter: Interpreter? = null
     private @Volatile var gpuDelegate: GpuDelegate? = null
     private val mutex = Mutex()
+    private val helperScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     companion object {
         private const val MODEL_FILENAME = "mobilefacenet.tflite"
@@ -113,7 +117,7 @@ class FaceRecognitionHelper @Inject constructor(
     }
 
     override fun close() {
-        runBlocking {
+        helperScope.launch {
             mutex.withLock {
                 interpreter?.close()
                 interpreter = null
