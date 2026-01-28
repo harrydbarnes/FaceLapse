@@ -20,8 +20,8 @@ import kotlin.math.sqrt
 class FaceRecognitionHelper @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
-    private var interpreter: Interpreter? = null
-    private var gpuDelegate: GpuDelegate? = null
+    private @Volatile var interpreter: Interpreter? = null
+    private @Volatile var gpuDelegate: GpuDelegate? = null
     private val mutex = Mutex()
 
     companion object {
