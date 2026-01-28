@@ -2,6 +2,7 @@ package com.facelapse.app.domain
 
 import android.content.Context
 import android.net.Uri
+import android.graphics.Bitmap
 import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.face.Face
@@ -31,6 +32,16 @@ class FaceDetectorHelper @Inject constructor(
     suspend fun detectFaces(uri: Uri): FaceDetectionResult {
         return withContext(Dispatchers.IO) {
             val bitmap = imageLoader.loadUprightBitmap(uri) ?: return@withContext FaceDetectionResult(emptyList(), 0, 0)
+            try {
+                detectFaces(bitmap)
+            } finally {
+                bitmap.recycle()
+            }
+        }
+    }
+
+    suspend fun detectFaces(bitmap: Bitmap): FaceDetectionResult {
+        return withContext(Dispatchers.Default) {
             val width = bitmap.width
             val height = bitmap.height
             try {
@@ -42,8 +53,6 @@ class FaceDetectorHelper @Inject constructor(
             } catch (e: Exception) {
                 android.util.Log.e("FaceDetectorHelper", "Error detecting faces", e)
                 FaceDetectionResult(emptyList(), width, height)
-            } finally {
-                bitmap.recycle()
             }
         }
     }

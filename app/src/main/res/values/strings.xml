@@ -9,6 +9,7 @@
 
     <!-- Actions -->
     <string name="action_align_faces">Align Faces</string>
+    <string name="action_re_align_smart">Re-align (Smart)</string>
     <string name="action_view_detected_faces">View Detected Faces</string>
     <string name="action_project_settings">Project Settings</string>
     <string name="action_share_project">Share Project</string>

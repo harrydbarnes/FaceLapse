@@ -162,13 +162,14 @@ fun ProjectDetailScreen(
                     },
                     actions = {
                         // Standard Top Bar Actions
-                        ActionTooltip(tooltip = stringResource(R.string.action_align_faces)) {
+                        val isTargetSet = project?.targetEmbedding != null
+                        ActionTooltip(tooltip = if (isTargetSet) stringResource(R.string.action_re_align_smart) else stringResource(R.string.action_align_faces)) {
                             IconButton(
                                 onClick = { viewModel.processFaces() },
                                 enabled = !isProcessing && photos.isNotEmpty()
                             ) {
                                 Icon(
-                                    Icons.Default.Face,
+                                    if (isTargetSet) Icons.Default.AutoFixHigh else Icons.Default.Face,
                                     contentDescription = stringResource(R.string.action_align_faces)
                                 )
                             }
@@ -894,28 +895,52 @@ fun FaceSelectionDialog(
                     }
                 }
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Button(
-                        onClick = onDismiss,
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text("Cancel")
+                        Button(
+                            onClick = {
+                                selectedFace?.let {
+                                    viewModel.setTargetPerson(photo, it)
+                                    onDismiss()
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                            enabled = selectedFace != null,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.tertiary
+                            )
+                        ) {
+                            Text("Track Person")
+                        }
                     }
-                    Button(
-                        onClick = {
-                            selectedFace?.let { viewModel.updateFaceSelection(photo, it) }
-                            onDismiss()
-                        },
-                        modifier = Modifier.weight(1f),
-                        enabled = selectedFace != null
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text("Save Selection")
+                        Button(
+                            onClick = onDismiss,
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                        ) {
+                            Text("Cancel")
+                        }
+                        Button(
+                            onClick = {
+                                selectedFace?.let { viewModel.updateFaceSelection(photo, it) }
+                                onDismiss()
+                            },
+                            modifier = Modifier.weight(1f),
+                            enabled = selectedFace != null
+                        ) {
+                            Text("Save Selection")
+                        }
                     }
                 }
             }

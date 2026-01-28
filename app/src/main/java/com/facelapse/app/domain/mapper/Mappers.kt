@@ -4,6 +4,7 @@ import com.facelapse.app.data.local.entity.PhotoEntity
 import com.facelapse.app.data.local.entity.ProjectEntity
 import com.facelapse.app.domain.model.Photo
 import com.facelapse.app.domain.model.Project
+import java.nio.ByteBuffer
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -17,7 +18,8 @@ fun ProjectEntity.toDomain(): Project {
         fps = fps,
         exportAsGif = exportAsGif,
         faceScale = faceScale,
-        aspectRatio = aspectRatio
+        aspectRatio = aspectRatio,
+        targetEmbedding = targetEmbedding?.let { byteArrayToFloatArray(it) }
     )
 }
 
@@ -30,8 +32,22 @@ fun Project.toEntity(): ProjectEntity {
         fps = fps,
         exportAsGif = exportAsGif,
         faceScale = faceScale,
-        aspectRatio = aspectRatio
+        aspectRatio = aspectRatio,
+        targetEmbedding = targetEmbedding?.let { floatArrayToByteArray(it) }
     )
+}
+
+private fun floatArrayToByteArray(floats: FloatArray): ByteArray {
+    val buffer = ByteBuffer.allocate(4 * floats.size)
+    buffer.asFloatBuffer().put(floats)
+    return buffer.array()
+}
+
+private fun byteArrayToFloatArray(bytes: ByteArray): FloatArray {
+    val buffer = ByteBuffer.wrap(bytes).asFloatBuffer()
+    val floats = FloatArray(buffer.capacity())
+    buffer.get(floats)
+    return floats
 }
 
 fun PhotoEntity.toDomain(): Photo {

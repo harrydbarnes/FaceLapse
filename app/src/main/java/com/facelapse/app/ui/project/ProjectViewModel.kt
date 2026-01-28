@@ -13,6 +13,7 @@ import com.facelapse.app.data.repository.ProjectRepository
 import com.facelapse.app.data.repository.SettingsRepository
 import com.facelapse.app.domain.FaceDetectionResult
 import com.facelapse.app.domain.FaceDetectorHelper
+import com.facelapse.app.domain.FaceRecognitionHelper
 import com.facelapse.app.domain.ImageLoader
 import com.facelapse.app.domain.VideoGenerator
 import com.facelapse.app.domain.model.Photo
@@ -33,6 +34,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.async
@@ -48,6 +52,7 @@ class ProjectViewModel @Inject constructor(
     private val repository: ProjectRepository,
     private val settingsRepository: SettingsRepository,
     private val faceDetectorHelper: FaceDetectorHelper,
+    private val faceRecognitionHelper: FaceRecognitionHelper,
     private val videoGenerator: VideoGenerator,
     private val imageLoader: ImageLoader,
     savedStateHandle: SavedStateHandle
@@ -57,6 +62,7 @@ class ProjectViewModel @Inject constructor(
         private val filenameTimestampFormatter = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")
         private val SAFE_FILENAME_REGEX = Regex("[^a-zA-Z0-9.-]")
         private const val GIF_SAFE_SHORTEST_SIDE_PX = 480f
+        private const val MAX_CONCURRENT_FACE_PROCESSING = 4
     }
 
     private val _projectId = MutableStateFlow<String?>(null)
@@ -196,84 +202,199 @@ class ProjectViewModel @Inject constructor(
         }
     }
 
-    fun processFaces() {
+    fun setTargetPerson(photo: Photo, face: Face) {
         viewModelScope.launch {
             _isProcessing.value = true
-            val id = projectId
-            if (id == null) {
-                _isProcessing.value = false
-                return@launch
-            }
-            val currentPhotos = repository.getPhotosList(id).sortedBy { it.sortOrder }
-
-            var previousFaceCenter: PointF? = null
-
-            currentPhotos.forEach { photo ->
-                val result = faceDetectorHelper.detectFaces(Uri.parse(photo.originalUri))
-                val faces = result.faces
-                val width = result.width
-                val height = result.height
-
-                if (width == 0 || height == 0) {
-                    repository.updatePhoto(photo.copy(isProcessed = true))
-                    return@forEach
-                }
-
-                if (photo.isProcessed) {
-                    val fx = photo.faceX
-                    val fy = photo.faceY
-                    val fw = photo.faceWidth
-                    val fh = photo.faceHeight
-
-                    previousFaceCenter = if (fx != null && fy != null && fw != null && fh != null) {
-                        calculateNormalizedCenter(fx, fy, fw, fh, width, height)
-                    } else {
-                        null
-                    }
-                } else {
-                    val bestFace = if (previousFaceCenter == null) {
-                        // First frame or lost track: Largest face
-                        faces.maxByOrNull { it.boundingBox.width() * it.boundingBox.height() }
-                    } else {
-                        val prevCenter = checkNotNull(previousFaceCenter)
-                        // Find closest to previous center
-                        faces.minByOrNull { face ->
-                            val center = calculateNormalizedCenter(
-                                face.boundingBox.left.toFloat(),
-                                face.boundingBox.top.toFloat(),
-                                face.boundingBox.width().toFloat(),
-                                face.boundingBox.height().toFloat(),
-                                width,
-                                height
-                            )
-                            hypot(center.x - prevCenter.x, center.y - prevCenter.y)
+            val success = withContext(Dispatchers.Default) {
+                try {
+                    val loaded = imageLoader.loadOptimizedBitmap(Uri.parse(photo.originalUri), 1024, 1024)
+                    if (loaded != null) {
+                        try {
+                            val embedding = faceRecognitionHelper.getFaceEmbedding(loaded.bitmap, face)
+                            if (embedding != null) {
+                                val id = projectId
+                                if (id == null) return@withContext false
+                                val currentProject = repository.getProject(id)
+                                if (currentProject == null) return@withContext false
+                                repository.updateProject(currentProject.copy(targetEmbedding = embedding))
+                                return@withContext true
+                            }
+                        } finally {
+                            if (!loaded.bitmap.isRecycled) loaded.bitmap.recycle()
                         }
                     }
+                    false
+                } catch (e: Exception) {
+                    Log.e("ProjectViewModel", "Error setting target person", e)
+                    false
+                }
+            }
 
-                    if (bestFace != null) {
-                        val updatedPhoto = photo.copy(
-                            isProcessed = true,
-                            faceX = bestFace.boundingBox.left.toFloat(),
-                            faceY = bestFace.boundingBox.top.toFloat(),
-                            faceWidth = bestFace.boundingBox.width().toFloat(),
-                            faceHeight = bestFace.boundingBox.height().toFloat()
-                        )
-                        repository.updatePhoto(updatedPhoto)
+            if (success) {
+                processFacesInternal()
+            } else {
+                _isProcessing.value = false
+            }
+        }
+    }
 
-                        previousFaceCenter = calculateNormalizedCenter(
-                            bestFace.boundingBox.left.toFloat(),
-                            bestFace.boundingBox.top.toFloat(),
-                            bestFace.boundingBox.width().toFloat(),
-                            bestFace.boundingBox.height().toFloat(),
+    fun processFaces() {
+        viewModelScope.launch {
+            processFacesInternal()
+        }
+    }
+
+    private suspend fun processFacesInternal() {
+        _isProcessing.value = true
+        val id = projectId
+        if (id == null) {
+            _isProcessing.value = false
+            return
+        }
+
+        withContext(Dispatchers.Default) {
+            try {
+                val project = repository.getProject(id)
+                val targetEmbedding = project?.targetEmbedding
+                val currentPhotos = repository.getPhotosList(id).sortedBy { it.sortOrder }
+
+                if (targetEmbedding != null) {
+                    processFacesWithTarget(currentPhotos, targetEmbedding)
+                } else {
+                    processFacesSpatial(currentPhotos)
+                }
+            } finally {
+                _isProcessing.value = false
+            }
+        }
+    }
+
+    private suspend fun processFacesWithTarget(photos: List<Photo>, targetEmbedding: FloatArray) {
+        withContext(Dispatchers.Default) {
+            val semaphore = kotlinx.coroutines.sync.Semaphore(MAX_CONCURRENT_FACE_PROCESSING)
+            val jobs = photos.map { photo ->
+                async {
+                    semaphore.acquire()
+                    try {
+                        val loaded = imageLoader.loadOptimizedBitmap(Uri.parse(photo.originalUri), 1024, 1024)
+                        if (loaded != null) {
+                        try {
+                            val result = faceDetectorHelper.detectFaces(loaded.bitmap)
+                            val faces = result.faces
+
+                            if (result.width == 0 || result.height == 0) {
+                                repository.updatePhoto(photo.copy(isProcessed = false))
+                                return@async
+                            }
+
+                            var bestCandidate: Face? = null
+                            var bestScore = -1f
+
+                            for (face in faces) {
+                                val embed = faceRecognitionHelper.getFaceEmbedding(loaded.bitmap, face)
+                                if (embed != null) {
+                                    val score = faceRecognitionHelper.calculateCosineSimilarity(embed, targetEmbedding)
+                                    if (score > bestScore) {
+                                        bestScore = score
+                                        bestCandidate = face
+                                    }
+                                }
+                            }
+
+                            val bestFace = if (bestScore > FaceRecognitionHelper.THRESHOLD) bestCandidate else null
+
+                            if (bestFace != null) {
+                                val updatedPhoto = photo.copy(
+                                    isProcessed = true,
+                                    faceX = bestFace.boundingBox.left.toFloat(),
+                                    faceY = bestFace.boundingBox.top.toFloat(),
+                                    faceWidth = bestFace.boundingBox.width().toFloat(),
+                                    faceHeight = bestFace.boundingBox.height().toFloat()
+                                )
+                                repository.updatePhoto(updatedPhoto)
+                            } else {
+                                repository.updatePhoto(photo.copy(isProcessed = false))
+                            }
+                        } finally {
+                            if (!loaded.bitmap.isRecycled) loaded.bitmap.recycle()
+                        }
+                    } else {
+                        // Failed to load, keep as unprocessed
+                        repository.updatePhoto(photo.copy(isProcessed = false))
+                    }
+                    } finally {
+                        semaphore.release()
+                    }
+                }
+            }
+            jobs.awaitAll()
+        }
+    }
+
+    private suspend fun processFacesSpatial(photos: List<Photo>) {
+        var previousFaceCenter: PointF? = null
+
+        for (photo in photos) {
+            val result = faceDetectorHelper.detectFaces(Uri.parse(photo.originalUri))
+            val faces = result.faces
+            val width = result.width
+            val height = result.height
+
+            if (width == 0 || height == 0) {
+                repository.updatePhoto(photo.copy(isProcessed = false))
+                continue
+            }
+            if (photo.isProcessed) {
+                val fx = photo.faceX
+                val fy = photo.faceY
+                val fw = photo.faceWidth
+                val fh = photo.faceHeight
+
+                previousFaceCenter = if (fx != null && fy != null && fw != null && fh != null) {
+                    calculateNormalizedCenter(fx, fy, fw, fh, width, height)
+                } else {
+                    null
+                }
+            } else {
+                val bestFace = if (previousFaceCenter == null) {
+                    faces.maxByOrNull { it.boundingBox.width() * it.boundingBox.height() }
+                } else {
+                    val prevCenter = checkNotNull(previousFaceCenter)
+                    faces.minByOrNull { face ->
+                        val center = calculateNormalizedCenter(
+                            face.boundingBox.left.toFloat(),
+                            face.boundingBox.top.toFloat(),
+                            face.boundingBox.width().toFloat(),
+                            face.boundingBox.height().toFloat(),
                             width,
                             height
                         )
-                    } else {
-                        repository.updatePhoto(photo.copy(isProcessed = true))
+                        hypot(center.x - prevCenter.x, center.y - prevCenter.y)
                     }
                 }
+
+                if (bestFace != null) {
+                    val updatedPhoto = photo.copy(
+                        isProcessed = true,
+                        faceX = bestFace.boundingBox.left.toFloat(),
+                        faceY = bestFace.boundingBox.top.toFloat(),
+                        faceWidth = bestFace.boundingBox.width().toFloat(),
+                        faceHeight = bestFace.boundingBox.height().toFloat()
+                    )
+                    repository.updatePhoto(updatedPhoto)
+
+                    previousFaceCenter = calculateNormalizedCenter(
+                        bestFace.boundingBox.left.toFloat(),
+                        bestFace.boundingBox.top.toFloat(),
+                        bestFace.boundingBox.width().toFloat(),
+                        bestFace.boundingBox.height().toFloat(),
+                        width,
+                        height
+                    )
+                } else {
+                    repository.updatePhoto(photo.copy(isProcessed = false))
+                }
             }
-            _isProcessing.value = false
         }
     }
 
@@ -438,6 +559,14 @@ class ProjectViewModel @Inject constructor(
     fun deletePhoto(photo: Photo) {
         viewModelScope.launch {
             repository.deletePhoto(photo)
+        }
+    }
+
+    @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
+    override fun onCleared() {
+        super.onCleared()
+        GlobalScope.launch(Dispatchers.IO) {
+            faceRecognitionHelper.close()
         }
     }
 }
