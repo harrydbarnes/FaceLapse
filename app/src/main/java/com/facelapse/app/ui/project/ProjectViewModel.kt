@@ -205,7 +205,7 @@ class ProjectViewModel @Inject constructor(
     fun setTargetPerson(photo: Photo, face: Face) {
         viewModelScope.launch {
             _isProcessing.value = true
-            withContext(Dispatchers.Default) {
+            val success = withContext(Dispatchers.Default) {
                 try {
                     val loaded = imageLoader.loadOptimizedBitmap(Uri.parse(photo.originalUri), 1024, 1024)
                     if (loaded != null) {
@@ -213,27 +213,27 @@ class ProjectViewModel @Inject constructor(
                             val embedding = faceRecognitionHelper.getFaceEmbedding(loaded.bitmap, face)
                             if (embedding != null) {
                                 val id = projectId
-                                if (id == null) {
-                                    _isProcessing.value = false
-                                    return@withContext
-                                }
+                                if (id == null) return@withContext false
                                 val currentProject = repository.getProject(id)
-                                if (currentProject == null) {
-                                    _isProcessing.value = false
-                                    return@withContext
-                                }
+                                if (currentProject == null) return@withContext false
                                 repository.updateProject(currentProject.copy(targetEmbedding = embedding))
-                                processFacesInternal()
+                                return@withContext true
                             }
                         } finally {
                             if (!loaded.bitmap.isRecycled) loaded.bitmap.recycle()
                         }
                     }
+                    false
                 } catch (e: Exception) {
                     Log.e("ProjectViewModel", "Error setting target person", e)
-                } finally {
-                    _isProcessing.value = false
+                    false
                 }
+            }
+
+            if (success) {
+                processFacesInternal()
+            } else {
+                _isProcessing.value = false
             }
         }
     }
@@ -392,9 +392,7 @@ class ProjectViewModel @Inject constructor(
                         height
                     )
                 } else {
-                    if (!photo.isProcessed) {
-                        repository.updatePhoto(photo.copy(isProcessed = false))
-                    }
+                    repository.updatePhoto(photo.copy(isProcessed = false))
                 }
             }
         }
