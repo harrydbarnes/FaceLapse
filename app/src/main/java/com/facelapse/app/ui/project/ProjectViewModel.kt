@@ -270,7 +270,7 @@ class ProjectViewModel @Inject constructor(
     }
 
     private suspend fun processFacesWithTarget(photos: List<Photo>, targetEmbedding: FloatArray) {
-        withContext(Dispatchers.IO) {
+        withContext(Dispatchers.Default) {
             val semaphore = kotlinx.coroutines.sync.Semaphore(MAX_CONCURRENT_FACE_PROCESSING)
             val jobs = photos.map { photo ->
                 async {
