@@ -61,7 +61,7 @@ fun FaceOverlay(
                     .fillMaxSize()
                     .pointerInput(faces, imgW, imgH) {
                         detectTapGestures { tapOffset ->
-                            val (w, h) = size.width.toFloat() to size.height.toFloat()
+                            val (w, h) = canvasSize.width.toFloat() to canvasSize.height.toFloat()
                             val scale = min(w / imgW, h / imgH)
                             val displayedW = imgW * scale
                             val displayedH = imgH * scale
