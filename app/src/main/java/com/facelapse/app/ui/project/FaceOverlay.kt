@@ -34,7 +34,7 @@ fun FaceOverlay(
     // Use semi-transparent white for unselected faces to ensure visibility on dark images
     // but not be too distracting.
     val outlineColor = Color.White.copy(alpha = 0.7f)
-
+    var canvasSize by remember { mutableStateOf(IntSize.Zero) }
     Box(modifier = modifier) {
         val imagePainter = rememberAsyncImagePainter(model = photo.originalUri)
         val painterState = imagePainter.state
