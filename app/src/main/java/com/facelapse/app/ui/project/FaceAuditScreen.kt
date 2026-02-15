@@ -1,15 +1,10 @@
 package com.facelapse.app.ui.project
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Warning
@@ -17,25 +12,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImagePainter
-import coil.compose.rememberAsyncImagePainter
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import com.facelapse.app.R
 import com.facelapse.app.domain.FaceDetectionResult
 import com.facelapse.app.domain.model.Photo
-import com.google.mlkit.vision.face.Face
 import kotlinx.coroutines.launch
-import kotlin.math.abs
-import kotlin.math.min
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -133,7 +115,6 @@ fun FaceAuditItem(
 ) {
     var detectionResult by remember { mutableStateOf<FaceDetectionResult?>(null) }
     var isLoading by remember { mutableStateOf(true) }
-    var containerSize by remember { mutableStateOf(IntSize.Zero) }
 
     LaunchedEffect(photo.id) {
         isLoading = true
@@ -148,88 +129,25 @@ fun FaceAuditItem(
         findMatchingFace(detectedFaces, photo)
     }
 
-    // Define colors for selected (highlight) vs unselected (outline) faces
-    val highlightColor = MaterialTheme.colorScheme.primary
-    val outlineColor = MaterialTheme.colorScheme.outline
-
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .onSizeChanged { containerSize = it }
+        modifier = Modifier.fillMaxSize()
     ) {
         if (isLoading) {
             CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
         } else {
-            val imagePainter = rememberAsyncImagePainter(model = photo.originalUri)
-            val painterState = imagePainter.state
-
-            Image(
-                painter = imagePainter,
-                contentDescription = null,
-                contentScale = ContentScale.Fit,
+            FaceOverlay(
+                photo = photo,
+                faces = detectedFaces,
+                selectedFace = currentSelectedFace,
+                onFaceClick = { clickedFace ->
+                    viewModel.updateFaceSelection(photo, clickedFace)
+                },
+                detectionWidth = detectionResult?.width ?: 0,
+                detectionHeight = detectionResult?.height ?: 0,
                 modifier = Modifier.fillMaxSize()
             )
 
-            if (painterState is AsyncImagePainter.State.Success && containerSize != IntSize.Zero) {
-                val intrinsicSize = painterState.result.drawable.intrinsicWidth.toFloat() to painterState.result.drawable.intrinsicHeight.toFloat()
-                val (imgW, imgH) = intrinsicSize
-                val (viewW, viewH) = containerSize.width.toFloat() to containerSize.height.toFloat()
-
-                val originalW = detectionResult?.width?.toFloat() ?: imgW
-                val originalH = detectionResult?.height?.toFloat() ?: imgH
-
-                val scaleX = imgW / originalW
-                val scaleY = imgH / originalH
-
-                val scale = min(viewW / imgW, viewH / imgH)
-                val displayedW = imgW * scale
-                val displayedH = imgH * scale
-                val offsetX = (viewW - displayedW) / 2
-                val offsetY = (viewH - displayedH) / 2
-
-                val mappedFaces = detectedFaces.map { face ->
-                    val rect = face.boundingBox
-                    val mappedRect = Rect(
-                        left = rect.left * scaleX * scale + offsetX,
-                        top = rect.top * scaleY * scale + offsetY,
-                        right = rect.right * scaleX * scale + offsetX,
-                        bottom = rect.bottom * scaleY * scale + offsetY
-                    )
-                    face to mappedRect
-                }
-
-                Canvas(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .pointerInput(mappedFaces) {
-                            detectTapGestures { tapOffset ->
-                                val clickedFace = mappedFaces.find { (_, rect) ->
-                                    rect.contains(tapOffset)
-                                }?.first
-
-                                if (clickedFace != null) {
-                                    viewModel.updateFaceSelection(photo, clickedFace)
-                                }
-                            }
-                        }
-                ) {
-                    mappedFaces.forEach { (face, rect) ->
-                        val isSelected = face == currentSelectedFace
-
-                        val strokeColor = if (isSelected) highlightColor else outlineColor
-                        val strokeWidth = if (isSelected) 6.dp.toPx() else 3.dp.toPx()
-
-                        drawRect(
-                            color = strokeColor,
-                            topLeft = rect.topLeft,
-                            size = rect.size,
-                            style = Stroke(width = strokeWidth)
-                        )
-                    }
-                }
-            }
-
-            if (!isLoading && detectedFaces.isEmpty()) {
+            if (detectedFaces.isEmpty()) {
                  Box(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
@@ -243,7 +161,7 @@ fun FaceAuditItem(
                          Text(stringResource(R.string.face_audit_no_faces_detected), color = MaterialTheme.colorScheme.onErrorContainer)
                     }
                 }
-            } else if (!isLoading && currentSelectedFace == null && detectedFaces.isNotEmpty()) {
+            } else if (currentSelectedFace == null) {
                  Box(
                     modifier = Modifier
                         .align(Alignment.TopCenter)

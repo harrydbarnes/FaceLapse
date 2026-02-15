@@ -726,7 +726,6 @@ fun FaceSelectionDialog(
 ) {
     var detectionResult by remember { mutableStateOf<FaceDetectionResult?>(null) }
     var isLoading by remember { mutableStateOf(true) }
-    var containerSize by remember { mutableStateOf(IntSize.Zero) }
 
     // Track locally selected face for UI feedback before saving
     var selectedFace by remember { mutableStateOf<Face?>(null) }
@@ -757,151 +756,47 @@ fun FaceSelectionDialog(
                     modifier = Modifier.padding(16.dp)
                 )
 
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .onSizeChanged { containerSize = it } // Capture container size
-                ) {
-                    if (isLoading) {
-                        CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-                    } else {
-                        val imagePainter = rememberAsyncImagePainter(model = photo.originalUri)
-                        val painterState = imagePainter.state
-
-                        Image(
-                            painter = imagePainter,
-                            contentDescription = null,
-                            contentScale = ContentScale.Fit,
-                            modifier = Modifier.fillMaxSize()
-                        )
-
-                        if (painterState is AsyncImagePainter.State.Success && containerSize != IntSize.Zero) {
-                            val intrinsicSize = painterState.result.drawable.intrinsicWidth.toFloat() to painterState.result.drawable.intrinsicHeight.toFloat()
-                            val (imgW, imgH) = intrinsicSize
-                            val (viewW, viewH) = containerSize.width.toFloat() to containerSize.height.toFloat()
-
-                            val originalW = detectionResult?.width?.toFloat() ?: imgW
-                            val originalH = detectionResult?.height?.toFloat() ?: imgH
-
-                            val scaleX = imgW / originalW
-                            val scaleY = imgH / originalH
-
-                            // Calculate ContentScale.Fit logic
-                            val scale = min(viewW / imgW, viewH / imgH)
-                            val displayedW = imgW * scale
-                            val displayedH = imgH * scale
-                            val offsetX = (viewW - displayedW) / 2
-                            val offsetY = (viewH - displayedH) / 2
-
-                            // Map Faces
-                            val mappedFaces = detectedFaces.map { face ->
-                                val rect = face.boundingBox
-                                val mappedRect = Rect(
-                                    left = rect.left * scaleX * scale + offsetX,
-                                    top = rect.top * scaleY * scale + offsetY,
-                                    right = rect.right * scaleX * scale + offsetX,
-                                    bottom = rect.bottom * scaleY * scale + offsetY
-                                )
-                                face to mappedRect
-                            }
-
-                            Canvas(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .pointerInput(mappedFaces) {
-                                        detectTapGestures { tapOffset ->
-                                            // Check if tap is inside any face rect
-                                            val clickedFace = mappedFaces.find { (_, rect) ->
-                                                rect.contains(tapOffset)
-                                            }?.first
-
-                                            if (clickedFace != null) {
-                                                selectedFace = clickedFace
-                                            }
-                                        }
-                                    }
-                            ) {
-                                mappedFaces.forEach { (face, rect) ->
-                                    // Highlight if selected
-                                    val isSelected = face == selectedFace
-
-                                    val strokeColor = if (isSelected) Color.Green else Color.White
-                                    val strokeWidth = if (isSelected) 8.dp.toPx() else 4.dp.toPx()
-
-                                    drawRect(
-                                        color = strokeColor,
-                                        topLeft = rect.topLeft,
-                                        size = rect.size,
-                                        style = Stroke(width = strokeWidth)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Selection List / Legend
-                if (detectedFaces.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "No faces detected.",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.error
-                        )
+                if (isLoading) {
+                    Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
                     }
                 } else {
-                    Text(
-                        text = "Detected Faces: ${detectedFaces.size} (Tap box or button to select)",
-                        modifier = Modifier.padding(8.dp),
-                        style = MaterialTheme.typography.bodyMedium
+                    FaceOverlay(
+                        photo = photo,
+                        faces = detectedFaces,
+                        selectedFace = selectedFace,
+                        onFaceClick = { selectedFace = it },
+                        detectionWidth = detectionResult?.width ?: 0,
+                        detectionHeight = detectionResult?.height ?: 0,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
                     )
 
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(80.dp)
-                            .padding(8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        // Kept for fallback or quick access
-                        detectedFaces.forEachIndexed { index, face ->
-                            val isSelected = face == selectedFace
-
-                            Button(
-                                onClick = {
-                                    selectedFace = face
-                                },
-                                modifier = Modifier.fillMaxHeight(),
-                                colors = if (isSelected) ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary
-                                ) else ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.secondary
-                                )
-                            ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text("Face ${index + 1}")
-                                    if (isSelected) {
-                                        Text("(Selected)", style = MaterialTheme.typography.labelSmall)
-                                    }
-                                }
-                            }
+                    if (detectedFaces.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "No faces detected.",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.error
+                            )
                         }
+                    } else {
+                        Text(
+                            text = "Detected Faces: ${detectedFaces.size} (Tap face to select)",
+                            modifier = Modifier.padding(8.dp),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
                     }
-                }
 
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Button(
                             onClick = {
@@ -910,36 +805,46 @@ fun FaceSelectionDialog(
                                     onDismiss()
                                 }
                             },
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.fillMaxWidth(),
                             enabled = selectedFace != null,
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.tertiary
+                                containerColor = MaterialTheme.colorScheme.primary
                             )
                         ) {
-                            Text("Track Person")
+                            Text("Track This Person")
                         }
-                    }
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Button(
-                            onClick = onDismiss,
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
-                        ) {
-                            Text("Cancel")
+                        if (selectedFace != null) {
+                            Text(
+                                text = "Sets this face as the target for the entire project.",
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.align(Alignment.CenterHorizontally)
+                            )
                         }
-                        Button(
-                            onClick = {
-                                selectedFace?.let { viewModel.updateFaceSelection(photo, it) }
-                                onDismiss()
-                            },
-                            modifier = Modifier.weight(1f),
-                            enabled = selectedFace != null
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Text("Save Selection")
+                            OutlinedButton(
+                                onClick = onDismiss,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Cancel")
+                            }
+                            Button(
+                                onClick = {
+                                    selectedFace?.let { viewModel.updateFaceSelection(photo, it) }
+                                    onDismiss()
+                                },
+                                modifier = Modifier.weight(1f),
+                                enabled = selectedFace != null,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.secondary
+                                )
+                            ) {
+                                Text("Update This Photo")
+                            }
                         }
                     }
                 }
